@@ -222,6 +222,8 @@ practical rules follow:
 
 ## Method
 
+New to dynamic programming, or want to see the recursion run once by hand? [A three-period example](docs/worked_example.md) solves a tiny version of the problem on paper (62.5% against 50% for a fixed rule) and shows how it maps onto the full one.
+
 - **State and action.** Wealth on a log-spaced grid of 300 points; stock weight in {0%, 10%, …, 100%}; yearly steps. Wealth evolves as `W' = W · (a · R_stock + (1 − a) · R_bond) + saving`.
 - **Backward step.** `V_t(W) = max_a E[V_{t+1}(W')]`, with the expectation taken over 4,000 sampled return pairs that are shared by all actions and all years (common random numbers), and `V_{t+1}` read off the grid by interpolation. The last step uses the terminal reward directly, so the 0/1 goal payoff is never smoothed.
 - **Objectives.** Probability of reaching the goal; power (CRRA) utility with γ = 2, 5, 10; log utility. Utility value functions are interpolated on the certainty-equivalent scale, which is nearly linear in wealth.
@@ -232,8 +234,9 @@ practical rules follow:
 
 I first checked the code on a simple two-outcome market where the answers can
 be worked out by hand; the stock/bond problem then runs through the same solver.
-`pytest` runs 54 checks, including:
+`pytest` runs 59 checks, including:
 
+- the three-period example: the engine reproduces every number in the hand calculation;
 - the simple market: the optimal policy under log and power utility is one fixed mix at every date and wealth level and matches the closed-form weight; the sampled-expectation DP converges to the exact one; the goal-probability DP is bracketed between a lower and an upper bound, and forward simulation lands inside the bracket;
 - no contributions → power and log utility policies are a single constant weight, equal to a direct one-period search;
 - far above the goal → all bonds and success ≈ 100%; far below → all stocks;
@@ -280,9 +283,11 @@ gbda/
   metrics.py     success probability and standard error, quantiles, certainty equivalent
   analysis.py    the investor problem and the experiments, parallel runner
   binomial.py    the simple two-outcome market used to check the engine
+  worked_example.py  the three-period example, by hand and by the engine
   plots.py       shared chart style
 run.py           runs every experiment; writes results/ and figures/
-tests/           54 checks
+tests/           59 checks
+docs/            worked_example.md: the recursion done by hand on a three-period problem
 data/            annual US stock, bill and bond returns, 1928–2025 (source in data/SOURCE.md)
 results/         tables (Markdown) and results.json with every number
 figures/         charts used above; figures/validation/ for the simple market
