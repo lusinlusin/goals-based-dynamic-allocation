@@ -264,11 +264,17 @@ def assumption_sets() -> list[market.Assumptions]:
         market.historical_assumptions(history, 1928, 1975),
         market.historical_assumptions(history, 1976, 2025),
         market.historical_assumptions(history, 2000, 2025),
-        market.building_block_assumptions(0.010, 0.050, -0.010, 0.049,
-                                          label="Building blocks (1.0% + 5.0% − 1.0%; bond yield 4.9%)"),
+        # Dividend yield 1.08% (S&P 500, 10 Nov 2026) and 10-year Treasury yield 4.84–4.98%
+        # (2–10 Nov 2026) are observed; earnings growth and valuation change are judgment inputs.
+        market.building_block_assumptions(0.011, 0.050, -0.010, 0.049,
+                                          label="Building blocks (1.1% + 5.0% − 1.0%; bond yield 4.9%)"),
         market.equilibrium_assumptions(label="Market equilibrium (60/40 market, cash 3%)"),
-        market.compound_forecast_assumptions(0.067, 0.048, label="Published outlook, higher (6.7% / 4.8% compound)"),
-        market.compound_forecast_assumptions(0.045, 0.045, label="Published outlook, lower (4.5% / 4.5% compound)"),
+        # J.P. Morgan 2027 Long-Term Capital Market Assumptions (data as of Sep 2026): U.S. large cap
+        # 7.5%; the only bond figure on the public page is global aggregate, 5.3%.
+        market.compound_forecast_assumptions(0.075, 0.053, label="Published outlook A (7.5% / 5.3% compound)"),
+        # Vanguard Capital Markets Model, 30 Sep 2026 run, 10-year ranges: U.S. equities 4.8–6.8%,
+        # U.S. aggregate bonds 5.1–6.1%; midpoints used.
+        market.compound_forecast_assumptions(0.058, 0.056, label="Published outlook B (5.8% / 5.6% compound)"),
     ]
 
 

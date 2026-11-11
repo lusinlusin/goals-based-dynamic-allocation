@@ -7,9 +7,9 @@
 | Historical average 1928–1975 | 10.5% / 23% | 3.0% / 4% | 8.3% / 2.9% | 83.2% | 64.7% | $8,086 | $11,777 |
 | Historical average 1976–2025 | 13.2% / 16% | 6.6% / 10% | 12.1% / 6.1% | 98.3% | 97.2% | $2,812 | $5,098 |
 | Historical average 2000–2025 | 9.6% / 18% | 4.2% / 9% | 8.2% / 3.8% | 84.4% | 73.1% | $8,145 | $10,312 |
-| Building blocks (1.0% + 5.0% − 1.0%; bond yield 4.9%) | 6.2% / 16% | 5.0% / 5% | 5.0% / 4.9% | 62.5% | 45.0% | $11,543 | $13,770 |
+| Building blocks (1.1% + 5.0% − 1.0%; bond yield 4.9%) | 6.3% / 16% | 5.0% / 5% | 5.1% / 4.9% | 63.3% | 46.0% | $11,426 | $13,652 |
 | Market equilibrium (60/40 market, cash 3%) | 7.0% / 16% | 3.5% / 5% | 5.8% / 3.4% | 63.5% | 42.9% | $11,836 | $14,062 |
-| Published outlook, higher (6.7% / 4.8% compound) | 7.9% / 16% | 4.9% / 5% | 6.7% / 4.8% | 76.3% | 61.5% | $9,844 | $11,777 |
-| Published outlook, lower (4.5% / 4.5% compound) | 5.7% / 16% | 4.6% / 5% | 4.5% / 4.5% | 55.3% | 37.5% | $12,422 | $14,766 |
+| Published outlook A (7.5% / 5.3% compound) | 8.7% / 16% | 5.4% / 5% | 7.5% / 5.3% | 83.9% | 72.0% | $8,555 | $10,430 |
+| Published outlook B (5.8% / 5.6% compound) | 7.0% / 16% | 5.7% / 5% | 5.8% / 5.6% | 74.3% | 57.9% | $10,078 | $12,188 |
 
 Success = probability of reaching the goal with $10,000 saved a year. Saving for 75% = yearly saving at which the success probability reaches 75%. Means are arithmetic; historical rows use that window's own volatilities and correlation, the others use the base-case ones.

@@ -53,7 +53,7 @@ Standard error on each probability: 0.15 percentage points (pp). Full table:
 
 Five findings, in order of importance:
 
-1. **The expected stock return matters more than everything else combined.** One point less (6% instead of 7%) cuts the success probability from 62% to 52%. No other single parameter moves it by more than about 3 points. Across reasonable ways of setting expected returns the answer ranges from 55% to 98%.
+1. **The expected stock return matters more than everything else combined.** One point less (6% instead of 7%) cuts the success probability from 62% to 52%. No other single parameter moves it by more than about 3 points. Across reasonable ways of setting expected returns the answer ranges from 62% to 98%.
 2. **The policy is far more robust than the probability.** A policy optimised for the base case and then run in a world with different returns loses less than 1 point against a policy re-optimised for that world. The model is reliable on *what to do*; it is only as good as the forecast on *how likely it is to work*.
 3. **A dynamic policy adds 7–10 points over the best fixed mix** for goals that are a stretch but reachable, and about 22 points over 60/40. In saving terms it is worth about $2,300 a year: reaching 75% takes $12,100 a year with the dynamic policy and $14,500 with 60/40.
 4. **The objective is a decision, not a detail.** "Maximise the chance of reaching the goal" and "maximise expected utility" produce very different policies (62% vs 38% success, but $323K vs $296K at the 10th percentile). The goal-probability policy gives up the upside to buy probability, and keeps full stock risk for anyone who falls behind.
@@ -109,18 +109,22 @@ range across return assumptions.
 | Historical average 1928–1975 | 8.3% / 2.9% | 83.2% | 64.7% | $8,100 |
 | Historical average 1976–2025 | 12.1% / 6.1% | 98.3% | 97.2% | $2,800 |
 | Historical average 2000–2025 | 8.2% / 3.8% | 84.4% | 73.1% | $8,100 |
-| Building blocks | 5.0% / 4.9% | 62.5% | 45.0% | $11,500 |
+| Building blocks | 5.1% / 4.9% | 63.3% | 46.0% | $11,400 |
 | Market equilibrium | 5.8% / 3.4% | 63.5% | 42.9% | $11,800 |
-| Published outlook, higher | 6.7% / 4.8% | 76.3% | 61.5% | $9,800 |
-| Published outlook, lower | 4.5% / 4.5% | 55.3% | 37.5% | $12,400 |
+| Published outlook A | 7.5% / 5.3% | 83.9% | 72.0% | $8,600 |
+| Published outlook B | 5.8% / 5.6% | 74.3% | 57.9% | $10,100 |
 
 Full table with arithmetic means and volatilities:
 [results/assumption_sets.md](results/assumption_sets.md).
 
 - **Historical averages** depend heavily on the window: 83% to 98% for the same plan. They are also nominal and reflect one country's unusually good century.
-- **Building blocks**: stocks = dividend yield + earnings growth + valuation change (1.0% + 5.0% − 1.0%); bonds = current 10-year Treasury yield (about 4.9% in early November 2026). These inputs are illustrative; change them in `run.py`.
+- **Building blocks**: stocks = dividend yield + earnings growth + valuation change (1.1% + 5.0% − 1.0%); bonds = current 10-year Treasury yield (4.9%). The dividend yield (1.08% on 10 November 2026, [multpl.com](https://www.multpl.com/s-p-500-dividend-yield)) and the Treasury yield (4.84–4.98% over 2–10 November 2026, [US Treasury par yield curve](https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve&field_tdr_date_value_month=202611)) are observed. Earnings growth and valuation change are my own judgment inputs; change them in `run.py`.
 - **Market equilibrium**: the returns that make a 60/40 market portfolio optimal for an investor with risk aversion 2.5 (the starting point of Black–Litterman), over a 3% cash rate.
-- **Published outlooks**: compound returns of the size large asset managers currently publish — about 6.7% for US large-cap stocks and 4.8% for US aggregate bonds at the higher end ([J.P. Morgan Long-Term Capital Market Assumptions, 2026 edition](https://www.jpmorgan.com/insights/markets-and-economy/markets/2026-long-term-capital-market-assumptions)), and about 4.5% for US stocks at the lower end (the middle of the 3.5–5.5% ten-year range in [Vanguard's 2026 outlook](https://corporate.vanguard.com/content/corporatesite/us/en/corp/vemo/vemo-return-forecasts.html); the bond figure of 4.5% is my placeholder). I took these from public summaries; check the originals before relying on them.
+- **Published outlooks**: compound returns taken from two asset managers' own pages, read on 10 November 2026.
+  - *A*: [J.P. Morgan's 2027 Long-Term Capital Market Assumptions](https://am.jpmorgan.com/us/en/asset-management/adv/insights/portfolio-insights/ltcma/) (data as of September 2026, 10–15 year horizon) put US large-cap stocks at 7.5%. The US aggregate bond figure sits in a matrix behind a login, so the bond input is the 5.3% the public page gives for *global* aggregate bonds. The page does not say whether 7.5% is compound or arithmetic; I treat it as compound.
+  - *B*: the [Vanguard Capital Markets Model](https://corporate.vanguard.com/content/corporatesite/us/en/corp/vemo/vemo-return-forecasts.html) run of 30 September 2026 gives 10-year ranges of 4.8–6.8% for US stocks and 5.1–6.1% for US aggregate bonds (geometric returns); I use the midpoints, 5.8% and 5.6%.
+  - Both are paired with the base-case volatilities and correlation, not the publishers' own.
+- **The base case sits at the cautious end**, mainly because its 3% bond return is well below today's yields. Outlook B has the same compound stock return as the base case (5.8%) and bonds at 5.6% instead of 2.9%; that alone lifts the dynamic policy from 62% to 74% and 60/40 from 40% to 58%.
 
 One trap worth naming: forecasts are usually quoted as **compound** returns, while
 simulations need **arithmetic** means. At 16% volatility the two differ by 1.2

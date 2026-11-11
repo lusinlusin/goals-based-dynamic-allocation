@@ -412,19 +412,19 @@
     "saving_60_40": 10312.5
    },
    {
-    "label": "Building blocks (1.0% + 5.0% \u2212 1.0%; bond yield 4.9%)",
-    "mu_stock": 0.06185294151862464,
+    "label": "Building blocks (1.1% + 5.0% \u2212 1.0%; bond yield 4.9%)",
+    "mu_stock": 0.06284227594303227,
     "mu_bond": 0.050188243085170114,
     "sigma_stock": 0.16,
     "sigma_bond": 0.05,
     "rho": 0.2,
-    "stock_compound": 0.050000000000000024,
+    "stock_compound": 0.051000000000000045,
     "bond_compound": 0.04899999999999995,
-    "dp_success": 0.62467,
-    "fixed_60_40_success": 0.44998,
-    "avg_stock_weight": 0.6518203499999999,
-    "saving_dp": 11542.96875,
-    "saving_60_40": 13769.53125
+    "dp_success": 0.63331,
+    "fixed_60_40_success": 0.4596,
+    "avg_stock_weight": 0.65204675,
+    "saving_dp": 11425.78125,
+    "saving_60_40": 13652.34375
    },
    {
     "label": "Market equilibrium (60/40 market, cash 3%)",
@@ -442,34 +442,34 @@
     "saving_60_40": 14062.5
    },
    {
-    "label": "Published outlook, higher (6.7% / 4.8% compound)",
-    "mu_stock": 0.07867412967882204,
-    "mu_bond": 0.04918937049883487,
+    "label": "Published outlook A (7.5% / 5.3% compound)",
+    "mu_stock": 0.0865917865764434,
+    "mu_bond": 0.054183754663630346,
     "sigma_stock": 0.16,
     "sigma_bond": 0.05,
     "rho": 0.2,
-    "stock_compound": 0.06700000000000003,
-    "bond_compound": 0.04800000000000003,
-    "dp_success": 0.76253,
-    "fixed_60_40_success": 0.61498,
-    "avg_stock_weight": 0.6426767,
-    "saving_dp": 9843.75,
-    "saving_60_40": 11777.34375
+    "stock_compound": 0.07499999999999982,
+    "bond_compound": 0.05299999999999996,
+    "dp_success": 0.83866,
+    "fixed_60_40_success": 0.71965,
+    "avg_stock_weight": 0.56400205,
+    "saving_dp": 8554.6875,
+    "saving_60_40": 10429.6875
    },
    {
-    "label": "Published outlook, lower (4.5% / 4.5% compound)",
-    "mu_stock": 0.05690655063556793,
-    "mu_bond": 0.046192765576125394,
+    "label": "Published outlook B (5.8% / 5.6% compound)",
+    "mu_stock": 0.06976813613898147,
+    "mu_bond": 0.05718041047523936,
     "sigma_stock": 0.16,
     "sigma_bond": 0.05,
     "rho": 0.2,
-    "stock_compound": 0.04499999999999996,
-    "bond_compound": 0.044999999999999866,
-    "dp_success": 0.55304,
-    "fixed_60_40_success": 0.37455,
-    "avg_stock_weight": 0.72232125,
-    "saving_dp": 12421.875,
-    "saving_60_40": 14765.625
+    "stock_compound": 0.05799999999999998,
+    "bond_compound": 0.05599999999999999,
+    "dp_success": 0.74324,
+    "fixed_60_40_success": 0.57881,
+    "avg_stock_weight": 0.49341759999999996,
+    "saving_dp": 10078.125,
+    "saving_60_40": 12187.5
    }
   ]
  },
