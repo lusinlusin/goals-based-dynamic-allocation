@@ -13,7 +13,6 @@ import pytest
 
 from gbda import analysis as an
 from gbda import dp, market, param_uncertainty as pu, policy, regime, resolve, simulate
-from gbda import worked_example as we
 
 INVESTOR = an.Investor()
 SHORT = replace(INVESTOR, horizon=6, w0=250_000.0)  # a quick problem for the slower checks
@@ -123,16 +122,6 @@ def test_changing_return_paths_splice_the_two_worlds() -> None:
     after = an.World(path[-1]).paths(3000, 8)
     assert np.array_equal(r_s[:, :5], before[0][:, :5]) and np.array_equal(r_b[:, 5:], after[1][:, 5:])
     assert np.array_equal(resolve.paths([B] * 8, 3000)[0], before[0])
-
-
-def test_three_period_example_when_the_coin_changes() -> None:
-    demo = we.resolve_demo()
-    assert demo["original_forecast_at_0.7"] == pytest.approx(0.25)
-    assert demo["resolved_forecast_at_0.7"] == 0.0  # 0.7 -> 0.91 at best: below the new threshold 1.0
-    assert demo["resolved_forecast_at_1.4"] == 1.0
-    assert demo["keep_table_success"] == pytest.approx(0.5)
-    assert demo["resolve_success"] == pytest.approx(0.5)
-    assert demo["unchanged_resolve_matches"] == 1.0
 
 
 # ---- 3.3 Parameter uncertainty ---------------------------------------------------- #

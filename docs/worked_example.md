@@ -115,28 +115,12 @@ The pattern in the answer carries over too. In the real problem the dynamic
 policy reaches the goal 62% of the time against 54% for the best fixed mix, for
 the same reason as here: it cuts risk once the goal is secured.
 
-## When the coin changes: re-solve the rest
+## When assumptions change
 
-The table above was built for a coin that pays ×1.4 on heads. Suppose that after
-the first period it turns out heads only pays **×1.3** from now on. The plan is
-re-solved for the two periods that are left, starting from wherever wealth is.
-The first period is over and plays no part.
-
-With heads at ×1.3, the last-period threshold becomes 1.3 ÷ 1.3 = **1.0** (it was 0.929):
-
-| Wealth after period 1 | Original table says | Re-solved table says | Why |
-|---|---|---|---|
-| 1.4 | hold cash, 100% | hold cash, 100% | already at the goal |
-| 0.7 | take risk, **25%** | out of reach, **0%** | the best case is 0.7 × 1.3 × 1.3 = 1.183 < 1.3 (one head gives 0.91, below the new threshold 1.0) |
-
-- **The action at 0.7 does not change.** The goal is out of reach either way, and taking risk is what the original table already said.
-- **The forecast does.** The original table still promises 25% from 0.7, and 62.5% from the start. With the new coin the plan reaches the goal in 4 of 8 sequences (every sequence that starts with a head), so **50%**, whether the table is kept or re-solved.
-- **Check:** re-solving at time 1 with the *old* coin gives back exactly the last two periods of the original table. That is the optimality principle, and a re-solve that fails it means a bug.
-
-The same pattern shows up in the full problem: when the expected stock return
-drops part-way through, re-solving changes the success probability by a fraction
-of a point but corrects the plan's own forecast by more than ten points (README,
-*When assumptions change*).
+What if the coin gets worse part-way through, nobody knows how good the coin
+is, or it switches between a good and a bad coin? [The same example, worked
+three more ways](worked_example_changes.md) answers each of these by hand and
+puts the results side by side.
 
 ## Check it yourself
 
@@ -145,6 +129,5 @@ python -m gbda.worked_example
 ```
 
 prints the three tables above next to the values the project's DP engine
-computes for the same problem, then the re-solve with the ×1.3 coin, and redraws
-the tree. `tests/test_worked_example.py` asserts that the hand tables and the
-engine agree; `tests/test_changing_assumptions.py` checks the re-solve numbers.
+computes for the same problem, and redraws the tree. `tests/test_worked_example.py`
+asserts that the two agree.

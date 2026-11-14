@@ -228,6 +228,10 @@ it for 20 years. That raises two questions. What should happen if the
 assumptions change part-way through? And what if they were never known in the
 first place? This section tries three answers, from simplest to most involved.
 
+> **Start here if the methods are new to you:** [the three-period example, worked
+> by hand for each of the three methods](docs/worked_example_changes.md), with a
+> side-by-side comparison at the end. Every number there can be checked on paper.
+
 The policy is a table that is solved offline and looked up at run time. A
 table is only valid for the inputs it was solved with, so it is saved together
 with them:
@@ -265,7 +269,7 @@ Paired standard errors on the differences: 0.04–0.05 pp. Five different change
 - **Re-solving barely changes the outcome.** It adds 0.2 points when the stock return drops to 5%, 1.4 points when it drops to 3%, and 0.7 points when stock volatility jumps from 16% to 24%. Hindsight is at most 0.2 points better than re-solving at once. This is finding 2 again: the shape of the policy (all stocks while behind, lock in once ahead) hardly depends on the exact numbers.
 - **Re-solving fixes the forecast.** In year 10 the original table still says 62%; the truth is 51%. The re-solved table says 51.2%, and 51.1% is what happens.
 - **That is the reason to do it.** Only more money closes the gap. To get back to the 62% the plan started with, saving has to rise from $10,000 to about $14,100 a year for the last ten years.
-- **Check.** Re-solving with *unchanged* assumptions gives back the rest of the original table exactly (the optimality principle: the tail of an optimal policy is optimal for the tail problem). In the first experiment the plan really was re-solved every year, and all nine re-solves before the change reproduced the original table bit for bit. So in practice a re-solve is only needed when the assumptions change. The [three-period example](docs/worked_example.md#when-the-coin-changes-re-solve-the-rest) shows the same thing by hand.
+- **Check.** Re-solving with *unchanged* assumptions gives back the rest of the original table exactly (the optimality principle: the tail of an optimal policy is optimal for the tail problem). In the first experiment the plan really was re-solved every year, and all nine re-solves before the change reproduced the original table bit for bit. So in practice a re-solve is only needed when the assumptions change. The [three-period example](docs/worked_example_changes.md#1-re-solve-the-coin-gets-worse-halfway) shows the same thing by hand.
 
 ### Admit that the expected return is not known
 
@@ -339,7 +343,7 @@ regime model only if the state can actually be identified in real time.
 
 ## Method
 
-New to dynamic programming, or want to see the recursion run once by hand? [A three-period example](docs/worked_example.md) solves a tiny version of the problem on paper (62.5% against 50% for a fixed rule) and shows how it maps onto the full one.
+New to dynamic programming, or want to see the recursion run once by hand? [A three-period example](docs/worked_example.md) solves a tiny version of the problem on paper (62.5% against 50% for a fixed rule) and shows how it maps onto the full one. [The same example, worked three more ways](docs/worked_example_changes.md) does the same for the three methods of section 6.
 
 - **State and action.** Wealth on a log-spaced grid of 300 points; stock weight in {0%, 10%, …, 100%}; yearly steps. Wealth evolves as `W' = W · (a · R_stock + (1 − a) · R_bond) + saving`.
 - **Backward step.** `V_t(W) = max_a E[V_{t+1}(W')]`, with the expectation taken over 4,000 sampled return pairs that are shared by all actions and all years (common random numbers), and `V_{t+1}` read off the grid by interpolation. The last step uses the terminal reward directly, so the 0/1 goal payoff is never smoothed.
@@ -351,9 +355,9 @@ New to dynamic programming, or want to see the recursion run once by hand? [A th
 
 I first checked the code on a simple two-outcome market where the answers can
 be worked out by hand; the stock/bond problem then runs through the same solver.
-`pytest` runs 78 checks, including:
+`pytest` runs 86 checks, including:
 
-- the three-period example: the engine reproduces every number in the hand calculation;
+- the three-period example: the engine reproduces every number in the hand calculation, for the original problem and for each of the three methods of section 6;
 - the simple market: the optimal policy under log and power utility is one fixed mix at every date and wealth level and matches the closed-form weight; the sampled-expectation DP converges to the exact one; the goal-probability DP is bracketed between a lower and an upper bound, and forward simulation lands inside the bracket;
 - no contributions → power and log utility policies are a single constant weight, equal to a direct one-period search;
 - far above the goal → all bonds and success ≈ 100%; far below → all stocks;
@@ -409,10 +413,12 @@ gbda/
   regime.py      good and bad market states as a second DP state variable
   binomial.py    the simple two-outcome market used to check the engine
   worked_example.py  the three-period example, by hand and by the engine
+  worked_changes.py  the same example under re-solving, parameter uncertainty and regimes
   plots.py       shared chart style
 run.py           runs every experiment; writes results/ and figures/
-tests/           78 checks
-docs/            worked_example.md: the recursion done by hand on a three-period problem, and a re-solve
+tests/           86 checks
+docs/            worked_example.md: the recursion done by hand on a three-period problem
+                 worked_example_changes.md: the same problem under the three methods of section 6
 data/            annual US stock, bill and bond returns, 1928–2025 (source in data/SOURCE.md)
 results/         tables (Markdown) and results.json with every number
 figures/         charts used above; figures/validation/ for the simple market
