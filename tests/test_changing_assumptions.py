@@ -250,3 +250,35 @@ def test_hidden_state_with_identical_regimes_is_the_base_model() -> None:
     for b in range(5):
         assert np.array_equal(sol.policy[:, b], base.policy)
         assert np.allclose(sol.value[:, b], base.value, atol=1e-12)
+
+
+# ---- Saving reviewed every year ------------------------------------------------- #
+def test_choose_saving_picks_the_smallest_level_that_reaches_the_target() -> None:
+    from gbda import saving as sv
+
+    levels = np.array([0.0, 5000.0, 10000.0])
+    est = np.array([[0.2, 0.5, 0.8],   # between levels 1 and 2: interpolate
+                    [0.7, 0.8, 0.9],   # already there at the lowest level
+                    [0.1, 0.2, 0.3],   # out of reach: the cap
+                    [0.2, 0.65, 0.9]])  # exactly on a level
+    c, k = sv.choose_saving(est, levels, 0.65)
+    assert c == pytest.approx([7500.0, 0.0, 10000.0, 5000.0])
+    assert list(k) == [2, 0, 2, 1]
+
+
+def test_reported_success_never_falls_with_more_saving() -> None:
+    from gbda import saving as sv
+
+    (tabs,) = sv.build_tables(SHORT, [(B, [0.0, 10_000.0, 20_000.0], None)], parallel=False)
+    assert np.all(np.diff(tabs.value, axis=0) >= -1e-9)
+
+
+def test_fixed_saving_through_the_review_code_is_the_base_plan() -> None:
+    from gbda import saving as sv
+
+    (tabs,) = sv.build_tables(SHORT, [(B, [SHORT.contribution], None)], parallel=False)
+    paths = an.World().paths(5000, SHORT.horizon)
+    res = sv.simulate_review([tabs] * SHORT.horizon, *paths, SHORT.w0, 0.75)
+    ref = an.run(simulate.dp_policy(an.solve_policy(SHORT, an.World())), SHORT, paths)
+    assert np.array_equal(res.wealth, ref.wealth)
+    assert np.all(res.saving == SHORT.contribution)

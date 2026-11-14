@@ -18,6 +18,7 @@ to ``figures/``. Sections:
     uncertainty  the expected stock return is uncertain; a policy that learns it
     regime       good and bad market states in the DP state
     hidden       the same states when they have to be inferred from returns
+    review       saving reviewed every year, against fixed saving
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from gbda import analysis as an
-from gbda import market, metrics, param_uncertainty, plots, regime, resolve, simulate
+from gbda import market, metrics, param_uncertainty, plots, regime, resolve, saving, simulate
 from gbda.analysis import Investor, World
 
 RESULTS = Path("results")
@@ -1032,6 +1033,89 @@ def section_hidden(n_paths: int) -> dict[str, Any]:
     return res
 
 
+def section_review(n_paths: int) -> dict[str, Any]:
+    """Section 7: review the saving every year, not just the allocation."""
+    res = saving.experiment(INVESTOR, n_paths)
+
+    def usd(x: float) -> str:  # nearest $100: the differences here are a few hundred dollars
+        return f"${round(x, -2):,.0f}"
+    rows = res["base"]
+    names = [("Fixed 60/40", "Fixed 60/40, fixed saving", "Fixed 60/40, saving reviewed every year"),
+             ("Dynamic allocation", "Dynamic allocation, fixed saving", "Dynamic allocation, saving reviewed every year")]
+    table = md_table(
+        ["Allocation", "Fixed saving", "Saving reviewed every year: average", "10th–90th pct across paths",
+         "Same in present value (3%)", "Success (fixed / reviewed)", "Years at the $40K cap", "Avg. stock (fixed / reviewed)"],
+        [[label, usd(rows[f]["avg_saving"]), usd(rows[r]["avg_saving"]),
+          f"{usd(rows[r]['saving_p10'])}–{usd(rows[r]['saving_p90'])}",
+          f"{usd(rows[f]['pv_level_saving'])} / {usd(rows[r]['pv_level_saving'])}",
+          f"{pct(rows[f]['success'])} / {pct(rows[r]['success'])}", pct(rows[r]["share_years_at_cap"]),
+          f"{pct(rows[f]['avg_stock_weight'], 0)} / {pct(rows[r]['avg_stock_weight'], 0)}"]
+         for label, f, r in names],
+    )
+    sh = res["shock"]["rows"]
+    shock_table = md_table(
+        ["Saving plan", "Success", "± s.e.", "Avg. saving, years 0–9", "Avg. saving, years 10–19", "90th pct of avg. saving"],
+        [[name, pct(r["success"]), pct(r["success_se"], 2), usd(r["avg_saving_before"]), usd(r["avg_saving_after"]),
+          usd(r["saving_p90"])] for name, r in sh.items()],
+    )
+    write(
+        "saving_review",
+        f"Saving reviewed every year — {n_paths:,} forward paths",
+        f"### Average yearly saving needed for a {pct(res['target'], 0)} chance of reaching the goal (base case)\n\n"
+        f"{table}\n\n### {res['shock']['label']}, noticed at once\n\n{shock_table}",
+        f"Review rule: each year save the smallest amount (between $0 and ${res['cap']:,.0f}) whose reported success "
+        f"reaches a target, with the allocation re-optimised for that amount. The target is set so that the realised "
+        f"success is {pct(res['target'], 0)}: {pct(res['review_target_dp'])} for the dynamic allocation, "
+        f"{pct(res['review_target_60_40'])} for 60/40 (lower than {pct(res['target'], 0)} because the rule steps in "
+        "again in later years). Fixed saving amounts are the bisection results of the saving curve. Present value: "
+        "the level yearly amount with the same value discounted at 3%. After the change, all plans re-solve the "
+        "allocation; the review rule also re-solves the saving.",
+    )
+
+    fig, axes = plt.subplots(1, 2, figsize=(13.5, 4.6), gridspec_kw={"width_ratios": [1, 1.25]})
+    ax = axes[0]
+    for i, ((label, f, r), color) in enumerate(zip(names[::-1], (plots.BLUE, plots.ORANGE))):
+        x_f, x_r = rows[f]["avg_saving"], rows[r]["avg_saving"]
+        ax.plot([x_r, x_f], [i, i], color=plots.AXIS, lw=2.5, zorder=1)
+        ax.plot(x_f, i, "o", ms=10, mfc=plots.SURFACE, mec=color, mew=2, zorder=2)
+        ax.plot(x_r, i, "o", ms=10, color=color, mec=plots.SURFACE, mew=1.5, zorder=3)
+        ax.text(x_f, i + 0.2, f"fixed {usd(x_f)}", ha="center", fontsize=9, color=plots.INK_2)
+        ax.text(x_r, i - 0.32, f"reviewed {usd(x_r)}", ha="center", fontsize=9, color=plots.INK)
+    ax.set_yticks([0, 1], [names[1][0], names[0][0]])
+    ax.set_ylim(-0.7, 1.6)
+    ax.set_xlim(9_000, 15_500)
+    ax.xaxis.set_major_formatter(plots.dollars)
+    ax.grid(axis="y", visible=False)
+    ax.set_xlabel(f"Average yearly saving for a {pct(res['target'], 0)} chance of reaching $500K")
+    ax.set_title("Two levers of about the same size")
+
+    ax = axes[1]
+    years = np.arange(INVESTOR.horizon)
+    r = rows["Dynamic allocation, saving reviewed every year"]
+    ax.fill_between(years, r["saving_by_year_p10"], r["saving_by_year_p90"], color=plots.BLUE, alpha=0.12, lw=0)
+    ax.plot(years, r["saving_by_year_median"], color=plots.BLUE, label="Reviewed, base case (median, 10th–90th pct)")
+    s = sh["Reviewed every year"]
+    ax.plot(years, s["saving_by_year_median"], color=plots.AQUA, label=f"Reviewed, {res['shock']['label'].lower()} (median)")
+    ax.axhline(res["fixed_saving_dp"], color=plots.GREY, lw=1.2, ls=(0, (4, 3)),
+               label=f"Fixed plan for {pct(res['target'], 0)}: {usd(res['fixed_saving_dp'])}")
+    ax.axvline(res["shock"]["year"] - 0.5, color=plots.AXIS, lw=1)
+    ax.text(res["shock"]["year"] - 0.35, 30_500, "stock return drops\n(second line only)", fontsize=8.5,
+            color=plots.INK_2, va="bottom")
+    ax.axhline(res["cap"], color=plots.AXIS, lw=1)
+    ax.text(0.0, res["cap"] + 500, f"cap {usd(res['cap'])}", fontsize=8.5, color=plots.INK_2, va="bottom")
+    ax.set_xticks(range(0, INVESTOR.horizon, 5))
+    ax.set_xlim(-0.3, INVESTOR.horizon - 0.7)
+    ax.set_ylim(0, res["cap"] + 3_000)
+    ax.yaxis.set_major_formatter(plots.dollars)
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Saving that year")
+    ax.set_title("The review saves more when behind, less (or nothing) when ahead")
+    ax.legend(loc="upper left", bbox_to_anchor=(0.0, 0.93))
+    fig.tight_layout()
+    plots.save(fig, FIGURES / "saving_review.png")
+    return res
+
+
 # --------------------------------------------------------------------------- #
 def _jsonable(obj: Any) -> Any:
     """Convert numpy types and drop large arrays for the JSON dump."""
@@ -1049,7 +1133,7 @@ def _jsonable(obj: Any) -> Any:
 def main() -> None:
     """Run the selected sections and write tables, figures and ``results/results.json``."""
     sections = ["compare", "assumptions", "sensitivity", "dynamic", "cap", "precision", "saving",
-                "resolve", "uncertainty", "regime", "hidden"]
+                "resolve", "uncertainty", "regime", "hidden", "review"]
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--only", nargs="+", choices=sections, default=sections)
     parser.add_argument("--quick", action="store_true", help="20,000 forward paths instead of 100,000")
@@ -1085,8 +1169,10 @@ def main() -> None:
             res = section_uncertainty(n_paths)
         elif name == "regime":
             res = section_regime(n_paths)
-        else:
+        elif name == "hidden":
             res = section_hidden(n_paths)
+        else:
+            res = section_review(n_paths)
         results[name] = _jsonable(res)
         out_file.write_text(json.dumps(results, indent=1))
         print(f"[{name}] done in {time.time() - start:.0f}s")

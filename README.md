@@ -51,7 +51,7 @@ correlation 0.2, lognormal returns, yearly rebalancing, stock weight in steps of
 Standard error on each probability: 0.15 percentage points (pp). Full table:
 [results/strategy_comparison.md](results/strategy_comparison.md).
 
-Six findings, in order of importance:
+Seven findings, in order of importance:
 
 1. **The expected stock return matters more than everything else combined.** One point less (6% instead of 7%) cuts the success probability from 62% to 52%. No other single parameter moves it by more than about 3 points. Across reasonable ways of setting expected returns the answer ranges from 62% to 98%.
 2. **The policy is far more robust than the probability.** A policy optimised for the base case and then run in a world with different returns loses less than 1 point against a policy re-optimised for that world. The model is reliable on *what to do*; it is only as good as the forecast on *how likely it is to work*.
@@ -59,6 +59,7 @@ Six findings, in order of importance:
 4. **The objective is a decision, not a detail.** "Maximise the chance of reaching the goal" and "maximise expected utility" produce very different policies (62% vs 38% success, but $323K vs $296K at the 10th percentile). The goal-probability policy gives up the upside to buy probability, and keeps full stock risk for anyone who falls behind.
 5. **A cap on the stock weight is expensive for this goal.** A maximum of 80% costs 8 points, 60% costs 20 points.
 6. **When the assumptions change, re-solve for the sake of the forecast.** If the expected stock return falls from 7% to 5% in year 10, re-solving adds only 0.2 points of success. It does correct the plan's own forecast from 62% to 51%, and getting back to 62% takes about $4,100 more saving a year. Uncertainty about the expected return leaves the policy unchanged; what it changes is how far the quoted probability can be trusted: at s = 2% the same policy succeeds 28% of the time if μ turns out in its worst tenth and 88% in its best. Knowing whether the market is in a good or a bad state would be worth 2.6 points if the state could be seen; inferred from returns, as it has to be in practice, it is worth 0.4 ([section 6](#6-when-assumptions-change)).
+7. **Reviewing the saving every year is worth about as much as a dynamic allocation.** Reaching 75% takes $12,100 a year with a dynamic allocation and fixed saving, and $10,400 on average if the saving is also reviewed every year (60/40: $14,500 fixed, $12,300 reviewed). The price is uncertainty about the saving itself: one path in ten averages about $17,400 a year or more ([section 7](#7-review-the-saving-not-only-the-allocation)).
 
 ## 1. Return assumptions come first
 
@@ -368,9 +369,49 @@ known and later ones are hidden. Full table: [results/regime_hidden.md](results/
 
 For this problem the practical order is:
 
-1. **Re-solve whenever the assumptions change.** It is cheap, and it keeps the quoted probability honest.
+1. **Re-solve whenever the assumptions change.** It is cheap, and it keeps the quoted probability honest. Then act on the new forecast through the saving rate (section 7).
 2. **Report the success probability as a range** that reflects uncertainty about μ.
 3. **Do not expect much from regime models.** Unless the state can be identified far better than from one year of returns, they add little: 0.4 points here.
+
+## 7. Review the saving, not only the allocation
+
+Section 6 kept coming back to one point. What re-solving changes is the
+forecast, and the way to act on a worse forecast is to save more. This section
+turns that into a rule.
+
+**Annual review.** At the start of each year, look up the success probability
+the plan reports for every saving level from $0 to $40,000 a year, each with
+the allocation re-optimised for it. Save the smallest amount that reaches a
+target, and repeat the next year. Saving rises after bad years and falls after
+good ones. The target is set so that the plan ends up with a 75% chance of
+reaching $500K, the same benchmark as the saving curve in section 1.
+
+![Saving review](figures/saving_review.png)
+
+**Average yearly saving for a 75% chance of reaching $500K:**
+
+| Allocation | Fixed saving | Saving reviewed every year | 10th–90th percentile across paths |
+|---|---|---|---|
+| Fixed 60/40 | $14,500 | $12,300 | $7,400–$17,700 |
+| Dynamic allocation | $12,100 | **$10,400** | $4,300–$17,400 |
+
+Full table: [results/saving_review.md](results/saving_review.md).
+
+- **Two levers of about the same size, and they add up.** Making the allocation dynamic saves about $1,900–2,300 a year. Reviewing the saving saves about $1,700–2,100. Together they cut the saving needed from $14,500 to $10,400 a year, 28% less. In present value at 3% the gap is a little larger ($10,300 against $12,100 for the dynamic allocation), because the review saves less in the last years.
+- **Where the money goes.** Paths that are ahead save less, and near the end nothing: the median saving is zero in the last three years. Paths that are behind save more. One in ten averages about $17,400 a year or more, and the $40,000 cap binds in 3% of years.
+- **The policy takes more risk when the saving can adjust.** The average stock weight is 87%, against 73% with fixed saving. Future saving works as a safety net, so the investment policy can aim higher.
+- **The yearly target is 63.7%, not 75%.** Each review assumes the new saving holds to the end. But the rule steps in again if things go wrong, so the realised success ends up above the target it uses each year.
+
+**When the stock return drops to 5% in year 10** (noticed at once, as in section 6):
+
+| Saving plan | Chance of reaching $500K | Average saving, years 0–9 | Years 10–19 |
+|---|---|---|---|
+| Fixed $10,000 | 51.1% | $10,000 | $10,000 |
+| Fixed $12,100 (the 75% plan) | 65.9% | $12,100 | $12,100 |
+| Reviewed every year | **69.4%** | $9,900 | $14,400 |
+
+- **The review reacts to the drop.** It sees the worse forecast in year 10 and raises saving to about $14,400 a year. For about the same total saving as the fixed $12,100 plan, it reaches 69.4% instead of 65.9%. In present value it saves less: $11,800 against $12,100 a year.
+- **It does not get back to 75%.** Half the time is gone when the drop is noticed, and the yearly target (63.7%) was set for the base case. Getting back to 75% would take a higher target, and more saving.
 
 ## Method
 
@@ -386,7 +427,7 @@ New to dynamic programming, or want to see the recursion run once by hand? [A th
 
 I first checked the code on a simple two-outcome market where the answers can
 be worked out by hand; the stock/bond problem then runs through the same solver.
-`pytest` runs 94 checks, including:
+`pytest` runs 97 checks, including:
 
 - the three-period example: the engine reproduces every number in the hand calculation, for the original problem and for each of the three methods of section 6;
 - the simple market: the optimal policy under log and power utility is one fixed mix at every date and wealth level and matches the closed-form weight; the sampled-expectation DP converges to the exact one; the goal-probability DP is bracketed between a lower and an upper bound, and forward simulation lands inside the bracket;
@@ -399,6 +440,7 @@ be worked out by hand; the stock/bond problem then runs through the same solver.
 - zero parameter uncertainty and two identical regimes (seen or inferred) each reduce to the base model exactly; the belief update equals the closed-form Bayesian posterior, and the DP's belief transitions keep the expected next belief equal to today's (moved one step along the chain, for regimes);
 - the regime filter is calibrated: in years where it puts the bad state at probability p, the market is in the bad state about p of the time;
 - a saved policy table loads back identically, inputs included;
+- a fixed saving run through the saving-review code reproduces the fixed plan path for path, and the reported success never falls when the saving rises;
 - each generator hits its target mean, volatility and correlation; the bootstrap keeps stock and bond returns paired and years consecutive within a block.
 
 ## Limitations and next steps
@@ -407,6 +449,7 @@ be worked out by hand; the stock/bond problem then runs through the same solver.
 - **The regime model knows its own parameters.** The hidden-state version infers *which* state the market is in, but takes the two states' returns and the switching probability as known, and learns from stock returns alone. Estimating those too, or adding a signal that identifies the state better than one year of returns (valuations, for example), are the next steps. The block bootstrap still tests the policy against serial dependence that no model here exploits.
 - **Parameter uncertainty covers the expected stock return only.** Volatilities, the correlation and bond returns are treated as known, and the investor learns from stock returns alone (bond returns would add a little information through the correlation). Each re-solve in section 6 also assumes the new assumptions then hold forever.
 - **Two assets, yearly rebalancing, 10% weight steps, no borrowing.**
+- **The saving review ignores what saving costs the household.** Apart from the present-value check, it treats a dollar saved this year like one saved next year. It caps saving at $40,000 a year and leaves out income, other goals and the strain of a sudden jump in saving. The principled version is a DP with saving as a second decision and a cost on saving.
 - **Savings are certain** and the goal is all-or-nothing. A natural extension is a blended objective (probability of success plus a penalty on the size of a miss), which would address the behaviour in section 3.
 - **History is one country, 98 years.** The bootstrap can only replay what is in that record.
 - The same engine extends to retirement drawdown: change the sign of the yearly cash flow and make the target "wealth stays above zero".
@@ -425,10 +468,11 @@ python -m pytest tests -q
 python run.py
 ```
 
-`python run.py` takes about twelve minutes on a 10-core laptop and rewrites every
+`python run.py` takes about fourteen minutes on a 10-core laptop and rewrites every
 table in `results/` and figure in `figures/`. `python run.py --only sensitivity`
 runs one section (`--only resolve uncertainty regime hidden` runs section 6, about eight
-minutes); `python -m gbda.binomial` runs the simple-market check.
+minutes; `--only review` runs section 7, about two); `python -m gbda.binomial` runs the
+simple-market check.
 
 ## Layout
 
@@ -443,12 +487,13 @@ gbda/
   resolve.py     assumptions that change mid-plan: keep the table, re-solve, hindsight
   param_uncertainty.py  expected stock return unknown: per-path draws, a policy that learns it
   regime.py      good and bad market states as a second DP state variable, seen or inferred
+  saving.py      the annual saving review: one table per saving level, the rule, its experiment
   binomial.py    the simple two-outcome market used to check the engine
   worked_example.py  the three-period example, by hand and by the engine
   worked_changes.py  the same example under re-solving, parameter uncertainty and regimes
   plots.py       shared chart style
 run.py           runs every experiment; writes results/ and figures/
-tests/           94 checks
+tests/           97 checks
 docs/            worked_example.md: the recursion done by hand on a three-period problem
                  worked_example_changes.md: the same problem under the three methods of section 6
 data/            annual US stock, bill and bond returns, 1928–2025 (source in data/SOURCE.md)
