@@ -301,11 +301,175 @@ ON_PATH_2 = [(0, W0, 0), (1, F(7, 5), 1), (1, F(7, 10), 0), (2, F(7, 5), 1), (2,
 
 
 def pct(x: Fraction) -> str:
-    return f"{float(x):.1%}"
+    return f"{float(x):.1%}".replace(".0%", "%")
+
+
+def frac(x: Fraction) -> str:
+    return str(x)
+
+
+# =========================================================================== #
+# Trees: the paths each policy actually follows
+# =========================================================================== #
+@dataclass(frozen=True)
+class Node:
+    """One node of a decision tree.
+
+    ``kind`` is ``"risk"``, ``"cash"`` or ``"out"`` (goal out of reach) for a
+    decision, ``"reached"`` or ``"missed"`` at the end. ``caption`` goes under
+    the circle in dark text, ``sub`` under it in grey.
+    """
+
+    t: int
+    y: float
+    text: str
+    kind: str
+    parent: int | None = None
+    edge: str = ""
+    caption: str = ""
+    sub: str = ""
+
+
+def _draw_tree(path, nodes: list[Node], title: str, height: float = 5.4, band: tuple[float, str] | None = None,
+               note: str = "") -> None:
+    """Draw a tree in the style of ``figures/worked_example_tree.png``."""
+    import matplotlib.pyplot as plt
+
+    from . import plots
+
+    plots.apply_style()
+    top = max(n.y for n in nodes)
+    fig, ax = plt.subplots(figsize=(11.5, height))
+    if band is not None:  # shaded periods, kept below the legend
+        x0, label = band
+        ax.axvspan(x0, PERIODS + 0.25, ymax=0.86, color=plots.GRID, alpha=0.45, lw=0, zorder=0)
+        ax.text(x0 + 0.06, 0.835, label, fontsize=9, color=plots.INK_2, va="top", transform=ax.get_xaxis_transform())
+    colors = {"risk": plots.ORANGE, "cash": plots.BLUE, "out": plots.GREY}
+    for n in nodes:
+        if n.parent is not None:
+            p = nodes[n.parent]
+            ax.plot([p.t + 0.16, n.t - 0.16], [p.y, n.y], color=plots.AXIS, lw=1.5, zorder=1)
+            ax.text((p.t + n.t) / 2, (p.y + n.y) / 2 + 0.14, n.edge, ha="center", va="bottom", fontsize=9,
+                    color=plots.INK_2)
+        if n.kind in colors:
+            ax.scatter([n.t], [n.y], s=1500, color=colors[n.kind], edgecolor=plots.SURFACE, lw=2, zorder=2)
+            ax.text(n.t, n.y, n.text, ha="center", va="center", fontsize=11, color="white", fontweight="bold", zorder=3)
+            ax.text(n.t, n.y - 0.5, n.caption, ha="center", va="top", fontsize=9, color=plots.INK)
+            if n.sub:
+                ax.text(n.t, n.y - 0.5 - 0.27 * (n.caption.count("\n") + 1), n.sub, ha="center", va="top",
+                        fontsize=8.5, color=plots.INK_2)
+        else:
+            hit = n.kind == "reached"
+            ax.scatter([n.t], [n.y], s=1500, color=plots.SURFACE, edgecolor=plots.INK if hit else plots.AXIS, lw=2,
+                       zorder=2)
+            ax.text(n.t, n.y, n.text, ha="center", va="center", fontsize=11, color=plots.INK, zorder=3)
+            ax.text(n.t + 0.22, n.y, "goal reached" if hit else "missed", ha="left", va="center", fontsize=9.5,
+                    color=plots.INK, fontweight="bold" if hit else "normal")
+    ax.set_xticks(range(PERIODS + 1), ["Start", "After 1 period", "After 2 periods", "End"])
+    ax.set_xlim(-0.45, PERIODS + 0.75)
+    def text_bottom(n: Node) -> float:
+        lines = n.caption.count("\n") + 1 + (n.sub.count("\n") + 1 if n.sub else 0)
+        return n.y - 0.5 - 0.27 * lines if n.kind in colors else n.y - 0.5
+
+    ax.set_ylim(min(text_bottom(n) for n in nodes) - 0.35, top + (2.6 if band else 1.0))
+    ax.set_yticks([])
+    ax.grid(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_visible(False)
+    handles = [plt.Line2D([], [], marker="o", ls="", ms=11, color=c) for c in (plots.ORANGE, plots.BLUE, plots.GREY)]
+    ax.legend(handles, ["Take risk", "Hold cash", "Goal out of reach"], loc="upper left", ncol=3,
+              bbox_to_anchor=(0.0, 1.02), columnspacing=1.6, handletextpad=0.3)
+    ax.set_title(title, pad=28)
+    if note:  # in axes coordinates, so it lines up with the title and legend
+        ax.text(0.0, -0.09, note, fontsize=9, color=plots.INK_2, ha="left", va="top", transform=ax.transAxes)
+    plots.save(fig, path)
+
+
+def tree_resolve(path) -> None:
+    """Method 1: the re-solved policy on the true coin (x1.4 in period 1, x1.3 after)."""
+    r = resolve_results()
+    v = lambda t, w: coin_value(t, F(w), NEW_COIN)[0]  # noqa: E731  the re-solved table's chance
+    nodes = [
+        Node(0, 3.0, "1", "risk", caption="take risk", sub=f"plan says {pct(r['promised'])}, truth {pct(r['resolve'])}"),
+        Node(1, 4.5, "1.4", "cash", 0, "heads ×1.4", f"hold cash\nchance {pct(v(1, 1.4))}"),
+        Node(1, 1.5, "0.7", "out", 0, "tails", f"out of reach\nchance {pct(v(1, 0.7))}",
+             f"original table: take risk, {pct(r['old_at_0.7'])}"),
+        Node(2, 4.5, "1.4", "cash", 1, "hold", f"hold cash\nchance {pct(v(2, 1.4))}"),
+        Node(2, 2.4, "0.91", "out", 2, "heads ×1.3", f"out of reach\nchance {pct(v(2, 0.91))}",
+             "needs 1.0 now (1.3 ÷ 1.3)"),
+        Node(2, 0.6, "0.49", "out", 2, "tails", f"out of reach\nchance {pct(v(2, 0.49))}"),
+        Node(3, 4.5, "1.4", "reached", 3, "hold"),
+        Node(3, 2.4, "1.183", "missed", 4, "heads ×1.3 (best case)"),
+        Node(3, 0.6, "0.637", "missed", 5, "heads ×1.3 (best case)"),
+    ]
+    _draw_tree(path, nodes, "1. Re-solve: heads pays ×1.3 from period 2 — same actions, lower chance", height=6.0,
+               band=(0.55, "from here heads pays ×1.3; the investor learns this at time 1 and re-solves"))
+
+
+def tree_learning(path) -> None:
+    """Method 2: the learning policy, with the chance of each flip given what has been seen."""
+    lv = lambda t, w, h: learn_value(t, F(w), h)[0]  # noqa: E731
+    good = lambda h, n: f"chance the coin is good: {frac(belief_good(h, n))}"  # noqa: E731
+    p = lambda h, n: frac(p_next_heads(h, n))  # noqa: E731
+    nodes = [
+        Node(0, 3.0, "1", "risk", caption=f"take risk\nchance {pct(lv(0, 1, 0))}",
+             sub=f"{good(0, 0)}\n(fair-coin table: {pct(coin_value(0, W0, OLD_COIN)[0])})"),
+        Node(1, 4.5, "1.4", "cash", 0, f"heads {p(0, 0)}", f"hold cash\nchance {pct(lv(1, 1.4, 1))}", good(1, 1)),
+        Node(1, 1.5, "0.7", "risk", 0, f"tails {frac(1 - p_next_heads(0, 0))}",
+             f"take risk\nchance {pct(lv(1, 0.7, 0))}",
+             f"{good(0, 1)}\n(fair-coin table: {pct(coin_value(1, F(7, 10), OLD_COIN)[0])})"),
+        Node(2, 4.5, "1.4", "cash", 1, "hold", f"hold cash\nchance {pct(lv(2, 1.4, 1))}"),
+        Node(2, 2.4, "0.98", "risk", 2, f"heads {p(0, 1)}", f"take risk\nchance {pct(lv(2, 0.98, 1))}", good(1, 2)),
+        Node(2, 0.6, "0.49", "out", 2, f"tails {frac(1 - p_next_heads(0, 1))}",
+             f"out of reach\nchance {pct(lv(2, 0.49, 0))}", good(0, 2)),
+        Node(3, 4.5, "1.4", "reached", 3, "hold"),
+        Node(3, 3.0, "1.372", "reached", 4, f"heads {p(1, 2)}"),
+        Node(3, 1.8, "0.686", "missed", 4, f"tails {frac(1 - p_next_heads(1, 2))}"),
+        Node(3, 0.6, "0.686", "missed", 5, "heads (best case)"),
+    ]
+    recovery = HALF * p_next_heads(0, 1) * p_next_heads(1, 2)
+    _draw_tree(path, nodes, "2. Unknown coin: the same actions, but a tail is now bad news about the coin",
+               height=5.9, note=f"Recovery path tails–heads–heads: 1/2 × {p(0, 1)} × {p(1, 2)} = {frac(recovery)} "
+                                f"(fair coin: 1/8). Edge labels: chance of that flip given the flips seen so far.")
+
+
+def tree_regimes(path) -> None:
+    """Method 3: starting in the bad state, where the regime-aware policy differs from the original one."""
+    rv = lambda t, w, s: regime_value(t, F(w), s)[0]  # noqa: E731
+    stay, switch = frac(STAY), frac(1 - STAY)
+    nodes = [
+        Node(0, 3.4, "1", "cash", caption=f"bad state\nhold cash\nchance {pct(rv(0, 1, BAD))}",
+             sub=f"taking the risk now: {pct(regime_value(0, W0, BAD)[2])}"),
+        Node(1, 5.4, "1", "risk", 0, f"turns good {switch}", f"good state\ntake risk\nchance {pct(rv(1, 1, GOOD))}"),
+        Node(1, 1.5, "1", "cash", 0, f"stays bad {stay}", f"bad state\nhold cash\nchance {pct(rv(1, 1, BAD))}"),
+        Node(2, 6.3, "1.4", "cash", 1, f"heads {frac(P_GOOD)}", "hold cash\nchance 100%"),
+        Node(2, 4.5, "0.7", "out", 1, f"tails {frac(1 - P_GOOD)}", "out of reach\nchance 0%"),
+        Node(2, 2.6, "1", "risk", 2, f"turns good {switch}", f"good state\ntake risk\nchance {pct(rv(2, 1, GOOD))}"),
+        Node(2, 0.4, "1", "risk", 2, f"stays bad {stay}", f"bad state\ntake risk\nchance {pct(rv(2, 1, BAD))}"),
+        Node(3, 6.3, "1.4", "reached", 3, "hold"),
+        Node(3, 4.5, "0.98", "missed", 4, "heads (best case)"),
+        Node(3, 3.15, "1.4", "reached", 5, f"heads {frac(P_GOOD)}"),
+        Node(3, 2.05, "0.7", "missed", 5, f"tails {frac(1 - P_GOOD)}"),
+        Node(3, 0.95, "1.4", "reached", 6, f"heads {frac(P_BAD)}"),
+        Node(3, -0.15, "0.7", "missed", 6, f"tails {frac(1 - P_BAD)}"),
+    ]
+    _draw_tree(path, nodes, "3. Regimes, starting in the bad state: hold cash and wait for a good coin", height=7.6,
+               note=f"Starting in the good state the policy takes the risk, as the original one does "
+                    f"(chance {pct(rv(0, 1, GOOD))}). Edge labels: state changes after a hold, coin flips after a risk.")
+
+
+def draw_trees(folder: str = "figures") -> None:
+    """Write the three tree figures used in docs/worked_example_changes.md."""
+    from pathlib import Path
+
+    folder_path = Path(folder)
+    tree_resolve(folder_path / "worked_changes_resolve_tree.png")
+    tree_learning(folder_path / "worked_changes_learning_tree.png")
+    tree_regimes(folder_path / "worked_changes_regime_tree.png")
 
 
 def main() -> None:
-    """Print every table in docs/worked_example_changes.md."""
+    """Print every table in docs/worked_example_changes.md and draw its trees."""
     r = resolve_results()
     print("1. Re-solve: heads pays x1.3 from period 2 (told at time 1)")
     print(f"   original table at time 1: 1.4 -> {r['old_at_1.4']}, 0.7 -> {r['old_at_0.7']}")
@@ -340,6 +504,9 @@ def main() -> None:
     for row in comparison():
         print(f"   {row.method:26s} ignore {pct(row.ignore_success)} (says {pct(row.ignore_says)}), "
               f"handle {pct(row.handle_success)} (says {pct(row.handle_says)}), policy changes: {row.policy_changes}")
+
+    draw_trees()
+    print("\nTrees written to figures/worked_changes_*_tree.png")
 
 
 if __name__ == "__main__":

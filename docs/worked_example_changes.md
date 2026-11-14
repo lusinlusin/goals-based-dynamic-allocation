@@ -45,6 +45,12 @@ from wherever wealth is. The first period is over and plays no part.
 
 From 0.7 the best case is 0.7 × 1.3 × 1.3 = 1.183, below the goal.
 
+![Re-solve tree](../figures/worked_changes_resolve_tree.png)
+
+The tree follows the re-solved policy on the true coin. Every action is the
+one the original table would have taken. Only the 0.7 node changes its label:
+from "take risk, 25%" to "out of reach, 0%".
+
 **Four ways to run the plan.** All of them face the same true coin: ×1.4 in period 1, ×1.3 after that.
 
 | Approach | Chance of reaching 1.3 | What it says the chance is |
@@ -99,6 +105,13 @@ replaced by the chance of heads in the table above.
 
 Holding cash at the start keeps wealth at 1, and then one head is needed at
 time 1. After seeing H that happens with chance ⅝, after T with chance ⅜.
+
+![Learning tree](../figures/worked_changes_learning_tree.png)
+
+Same shape as the original tree, but the edge labels are now the chance of
+each flip *given what has been seen*. After a tail the next flip is heads only
+⅜ of the time. So the recovery tails–heads–heads has probability ½ · ⅜ · ½ =
+3/32 instead of 1/8, which is where the 3 lost points go.
 
 **Result.**
 
@@ -159,6 +172,13 @@ In the bad state the investor starts in cash and waits for a good state. The
 20-year model does the same: in its bad state the policy holds mostly bonds,
 even when behind.
 
+![Regime tree](../figures/worked_changes_regime_tree.png)
+
+The tree starts in the bad state. The investor holds cash, takes the risk as
+soon as the state turns good, and in the last period takes it whatever the
+state, because waiting longer is no longer possible. Starting in the good
+state, the policy is the original one.
+
 **Result.**
 
 | Policy | Starts good | Starts bad | Either (½ each) | What it says |
@@ -198,6 +218,7 @@ What the three-period versions show:
 python -m gbda.worked_changes
 ```
 
-prints every table on this page as exact fractions. `tests/test_worked_changes.py`
+prints every table on this page as exact fractions and redraws the three
+trees. `tests/test_worked_changes.py`
 checks each number against the project's DP engine solving the same problems
 (per-year coins for method 1, a second state variable for methods 2 and 3).

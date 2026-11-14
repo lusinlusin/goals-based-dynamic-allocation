@@ -111,3 +111,10 @@ def test_comparison_table() -> None:
     assert (rows["3"].ignore_success, rows["3"].handle_success, rows["3"].handle_says) == (F(79, 128), F(21, 32), F(21, 32))
     assert [r.policy_changes for r in rows.values()] == [False, False, True]
     assert all(r.ignore_says == F(5, 8) for r in rows.values())
+
+
+def test_trees_are_drawn(tmp_path) -> None:
+    wc.draw_trees(str(tmp_path))
+    names = sorted(f.name for f in tmp_path.iterdir())
+    assert names == ["worked_changes_learning_tree.png", "worked_changes_regime_tree.png",
+                     "worked_changes_resolve_tree.png"]

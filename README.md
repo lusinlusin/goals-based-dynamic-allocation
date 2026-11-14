@@ -355,7 +355,7 @@ New to dynamic programming, or want to see the recursion run once by hand? [A th
 
 I first checked the code on a simple two-outcome market where the answers can
 be worked out by hand; the stock/bond problem then runs through the same solver.
-`pytest` runs 86 checks, including:
+`pytest` runs 87 checks, including:
 
 - the three-period example: the engine reproduces every number in the hand calculation, for the original problem and for each of the three methods of section 6;
 - the simple market: the optimal policy under log and power utility is one fixed mix at every date and wealth level and matches the closed-form weight; the sampled-expectation DP converges to the exact one; the goal-probability DP is bracketed between a lower and an upper bound, and forward simulation lands inside the bracket;
@@ -416,7 +416,7 @@ gbda/
   worked_changes.py  the same example under re-solving, parameter uncertainty and regimes
   plots.py       shared chart style
 run.py           runs every experiment; writes results/ and figures/
-tests/           86 checks
+tests/           87 checks
 docs/            worked_example.md: the recursion done by hand on a three-period problem
                  worked_example_changes.md: the same problem under the three methods of section 6
 data/            annual US stock, bill and bond returns, 1928–2025 (source in data/SOURCE.md)
