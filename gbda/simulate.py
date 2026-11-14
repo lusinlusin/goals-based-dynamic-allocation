@@ -69,7 +69,7 @@ def simulate(
     r_a: Array,
     r_b: Array,
     w0: float,
-    contribution: float = 0.0,
+    contribution: float | Array = 0.0,
 ) -> SimResult:
     """Run a policy forward along given return paths.
 
@@ -78,7 +78,8 @@ def simulate(
         r_a: Gross returns of asset A, shape ``(N, T)``.
         r_b: Gross returns of asset B, shape ``(N, T)``.
         w0: Starting wealth.
-        contribution: Cash added at the end of each period (after returns).
+        contribution: Cash added at the end of each period (after returns): one
+            amount for every period, or one per period, shape ``(T,)``.
 
     Returns:
         Wealth and weight paths.
@@ -86,9 +87,10 @@ def simulate(
     n_paths, horizon = r_a.shape
     wealth = np.empty((n_paths, horizon + 1))
     weights = np.empty((n_paths, horizon))
+    saving = np.broadcast_to(np.asarray(contribution, dtype=float), (horizon,))
     wealth[:, 0] = w0
     for t in range(horizon):
         a = policy(t, wealth[:, t])
         weights[:, t] = a
-        wealth[:, t + 1] = wealth[:, t] * (a * r_a[:, t] + (1.0 - a) * r_b[:, t]) + contribution
+        wealth[:, t + 1] = wealth[:, t] * (a * r_a[:, t] + (1.0 - a) * r_b[:, t]) + saving[t]
     return SimResult(wealth, weights)

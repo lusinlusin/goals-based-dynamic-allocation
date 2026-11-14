@@ -14,6 +14,9 @@ to ``figures/``. Sections:
     cap          cost of a ceiling on the stock weight
     precision    Monte Carlo error: forward paths and DP scenario sets
     saving       success probability as a function of yearly saving
+    resolve      assumptions change in year 10: keep the table, re-solve, or hindsight
+    uncertainty  the expected stock return is uncertain; a policy that learns it
+    regime       good and bad market states in the DP state
 """
 
 from __future__ import annotations
@@ -29,7 +32,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from gbda import analysis as an
-from gbda import market, metrics, plots, simulate
+from gbda import market, metrics, param_uncertainty, plots, regime, resolve, simulate
 from gbda.analysis import Investor, World
 
 RESULTS = Path("results")
@@ -706,6 +709,255 @@ def section_saving(n_paths: int) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
+# When the assumptions change: re-solve, parameter uncertainty, regimes
+# --------------------------------------------------------------------------- #
+SHOCKS = [
+    resolve.Shock("Stock return 7% → 5% from year 10", 10, {"mu_stock": 0.05}, (0, 3)),
+    resolve.Shock("Stock return 7% → 3% from year 10", 10, {"mu_stock": 0.03}, (0, 3)),
+    resolve.Shock("Stock return 7% → 5% from year 5", 5, {"mu_stock": 0.05}, (0, 3)),
+    resolve.Shock("Stock return 7% → 9% from year 10", 10, {"mu_stock": 0.09}, (0, 3)),
+    resolve.Shock("Stock volatility 16% → 24% from year 10", 10, {"sigma_stock": 0.24}, (0, 3)),
+]
+KEEP, RESOLVE, LATE, HINDSIGHT = ("Keep the original table", "Re-solve every year",
+                                  "Re-solve, change noticed 3 years late", "Hindsight: changes known from the start")
+
+
+def section_resolve(n_paths: int) -> dict[str, Any]:
+    """3.1: re-solve when the assumptions change, against keeping the table and against hindsight."""
+    # The first shock re-solves literally every year; the others only when the belief changes,
+    # which gives identical tables (optimality principle; checked here and in the tests).
+    runs = [resolve.experiment(INVESTOR, B, shock, n_paths, annual=(i == 0)) for i, shock in enumerate(SHOCKS)]
+    assert all(all(r["tail_checks"].values()) for r in runs), "a re-solve with unchanged assumptions changed the table"
+    promised = an.solve_policy(INVESTOR, BASE).value_at(0, INVESTOR.w0)
+    catch_up = resolve.catch_up_saving(INVESTOR, B, SHOCKS[0], promised)
+
+    main = runs[0]["rows"]
+    order = [KEEP, RESOLVE, LATE, HINDSIGHT, "Fixed 100% stock", "Fixed 60/40"]
+    table = md_table(
+        ["Approach", "Success", "± s.e.", "vs keeping the table", "Avg. stock weight, years 10–19",
+         "Table's own forecast when it acts"],
+        [[name, pct(main[name]["success"]), pct(main[name]["success_se"], 2),
+          "—" if name == KEEP else f"{pp(main[name]['vs_original'])} ± {100 * main[name]['vs_original_se']:.2f}",
+          pct(main[name]["avg_stock_after_change"], 0), pct(main[name]["forecast_at_change"])]
+         for name in order],
+    )
+    summary = md_table(
+        ["Change", "Keep the table", "Re-solve at once", "Re-solve 3 years late", "Hindsight",
+         "Original table's forecast at the change", "Re-solved forecast"],
+        [[r["shock"]["label"], pct(r["rows"][KEEP]["success"]),
+          f"{pct(r['rows'][RESOLVE]['success'])} ({pp(r['rows'][RESOLVE]['vs_original'])})",
+          f"{pct(r['rows'][LATE]['success'])} ({pp(r['rows'][LATE]['vs_original'])})",
+          f"{pct(r['rows'][HINDSIGHT]['success'])} ({pp(r['rows'][HINDSIGHT]['vs_original'])})",
+          pct(r["rows"][KEEP]["forecast_at_change"]), pct(r["rows"][RESOLVE]["forecast_at_change"])]
+         for r in runs],
+    )
+    write(
+        "resolve",
+        f"Re-solving when the assumptions change — {n_paths:,} forward paths",
+        f"### {SHOCKS[0].label}\n\n{table}\n\n### Every change tested\n\n{summary}",
+        "All approaches run on the same paths, which follow the true (changing) assumptions. "
+        "Differences against keeping the table are paired (same paths) with their standard error. "
+        "\"Forecast\" is the success probability the table itself reports, averaged over paths, in the year the "
+        "change is acted on (year 10, or 13 when noticed late); compare it with the success that then happens. "
+        f"The first change was re-solved every year; re-solves in years before the change reproduced the original "
+        f"table exactly. To get back to the original plan's {pct(promised)} after the first change, saving has to rise "
+        f"from ${INVESTOR.contribution:,.0f} to ${round(catch_up, -2):,.0f} a year for years 10–19 (re-solved with the new saving).",
+    )
+
+    # ---- figure ---------------------------------------------------------------- #
+    fig, axes = plt.subplots(1, 2, figsize=(13.5, 4.6), gridspec_kw={"width_ratios": [1, 1.25]})
+    ax = axes[0]
+    pairs = [("Original table", main[KEEP]), ("Re-solved in year 10", main[RESOLVE])]
+    for i, (label, r) in enumerate(pairs[::-1]):
+        f, s = r["forecast_at_change"], r["success"]
+        ax.plot([s, f], [i, i], color=plots.AXIS, lw=2.5, zorder=1)
+        ax.plot(f, i, "o", ms=9, mfc=plots.SURFACE, mec=plots.BLUE, mew=2, zorder=2)
+        ax.plot(s, i, "o", ms=9, color=plots.BLUE, mec=plots.SURFACE, mew=1.5, zorder=3)
+        ax.text(f, i + 0.17, f"says {pct(f, 0)}", ha="center", fontsize=9, color=plots.INK_2)
+        ax.text(s, i - 0.3, f"gets {pct(s, 0)}", ha="center", fontsize=9, color=plots.INK)
+    ax.set_yticks([0, 1], [p[0] for p in pairs[::-1]])
+    ax.set_ylim(-0.7, 1.6)
+    ax.set_xlim(0.45, 0.67)
+    ax.set_xticks([0.45, 0.50, 0.55, 0.60, 0.65])
+    ax.xaxis.set_major_formatter(lambda v, _: f"{int(round(100 * v))}%")
+    ax.grid(axis="y", visible=False)
+    ax.set_xlabel("Chance of reaching the goal")
+    ax.set_title("Stock return drops to 5% in year 10:\nre-solving fixes the forecast")
+
+    ax = axes[1]
+    marks = [(RESOLVE, "Re-solve at once", plots.AQUA, "o"), (LATE, "Re-solve 3 years late", plots.YELLOW, "s"),
+             (HINDSIGHT, "Hindsight (upper bound)", plots.MAGENTA, "D")]
+    labels = [r["shock"]["label"] for r in runs][::-1]
+    for j, (key, label, color, marker) in enumerate(marks):
+        y = np.arange(len(runs))[::-1] + (1 - j) * 0.22
+        x = np.array([100 * r["rows"][key]["vs_original"] for r in runs])
+        err = np.array([196 * r["rows"][key]["vs_original_se"] for r in runs])
+        ax.errorbar(x, y, xerr=err, fmt=marker, color=color, ms=7, mec=plots.SURFACE, mew=1, elinewidth=1.2,
+                    capsize=0, label=label)
+    ax.axvline(0, color=plots.INK, lw=1)
+    ax.set_yticks(range(len(runs)), labels)
+    ax.grid(axis="y", visible=False)
+    ax.set_xlabel("Gain in success probability over keeping the original table (pp, ±95%)")
+    ax.set_title("…but barely changes the outcome")
+    ax.legend(loc="lower right")
+    fig.tight_layout()
+    plots.save(fig, FIGURES / "resolve.png")
+    return {"runs": [{k: v for k, v in r.items() if k != "weights_by_year"} for r in runs],
+            "promised": promised, "catch_up_saving": catch_up}
+
+
+S_VALUES = (0.0, 0.01, 0.02, 0.03)
+
+
+def section_uncertainty(n_paths: int) -> dict[str, Any]:
+    """3.3: each path has its own expected stock return; a policy that learns it vs one that ignores it."""
+    jobs = [(INVESTOR, param_uncertainty.UncertainStock(B, s), n_paths) for s in S_VALUES]
+    res = an.run_parallel(param_uncertainty.case, jobs)
+    learn, ignore = "Learns the expected return", "Ignores the uncertainty"
+    table = md_table(
+        ["Uncertainty s", "Dynamic, learns μ", "Dynamic, ignores it", "Difference", "Fixed 100% stock", "Fixed 60/40",
+         "DP's own estimate (learns / ignores)", "Dynamic success, lowest / highest μ decile", "Avg. stock (learns / ignores)"],
+        [[f"{100 * r['s']:.0f}%", pct(r["rows"][learn]["success"]), pct(r["rows"][ignore]["success"]),
+          f"{100 * r['rows'][learn]['vs_ignore']:+.2f} ± {100 * r['rows'][learn]['vs_ignore_se']:.2f} pp",
+          pct(r["rows"]["Fixed 100% stock"]["success"]), pct(r["rows"]["Fixed 60/40"]["success"]),
+          f"{pct(r['rows'][learn]['dp_value'])} / {pct(r['rows'][ignore]['dp_value'])}",
+          f"{pct(r['rows'][learn]['success_lowest_mu_decile'], 0)} / {pct(r['rows'][learn]['success_highest_mu_decile'], 0)}",
+          f"{pct(r['rows'][learn]['avg_stock_weight'], 0)} / {pct(r['rows'][ignore]['avg_stock_weight'], 0)}"]
+         for r in res],
+    )
+    horizons = (1, 5, 10, 20, 30)
+    shares = {s: param_uncertainty.variance_share(s, B.sigma_stock, horizons, B.mu_stock) for s in S_VALUES[1:]}
+    share_table = md_table(["s"] + [f"{t} years" for t in horizons],
+                           [[f"{100 * s:.0f}%"] + [pct(v[t], 0) for t in horizons] for s, v in shares.items()])
+    write(
+        "param_uncertainty",
+        f"Parameter uncertainty in the expected stock return — {n_paths:,} forward paths",
+        f"{table}\n\n### Share of the variance of the cumulative stock return due to not knowing μ\n\n{share_table}",
+        "Each path draws its own expected stock return, approximately N(7%, s²), and keeps it for 20 years. "
+        "\"Learns μ\" updates a normal prior from each year's stock return and solves the DP on (year, wealth, belief); "
+        "\"ignores it\" is the same solver with s = 0 (the base-case policy, 2,000 DP scenarios). Differences are paired. "
+        "Deciles: the success probability among the 10% of paths with the lowest and the highest drawn μ.",
+    )
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4.6))
+    ax = axes[0]
+    xs = 100 * np.array(S_VALUES)
+    for name, label, color in ((learn, "Dynamic policy", plots.BLUE), ("Fixed 60/40", "Fixed 60/40", plots.ORANGE)):
+        y = np.array([r["rows"][name]["success"] for r in res])
+        lo = np.array([r["rows"][name]["success_lowest_mu_decile"] for r in res])
+        hi = np.array([r["rows"][name]["success_highest_mu_decile"] for r in res])
+        if name == learn:  # one filled band only: two overlapping fills mix into a third colour
+            ax.fill_between(xs, lo, hi, color=color, alpha=0.10, lw=0)
+        ax.plot(xs, y, color=color, marker="o", ms=6, mec=plots.SURFACE, mew=1.2, label=f"{label}, all paths")
+        ax.plot(xs, lo, color=color, lw=1, ls=(0, (2, 2)))
+        ax.plot(xs, hi, color=color, lw=1, ls=(0, (2, 2)))
+        ax.text(xs[-1] + 0.08, y[-1], pct(y[-1], 0), va="center", fontsize=9, color=plots.INK)
+    ax.text(xs[-1] + 0.08, res[-1]["rows"][learn]["success_highest_mu_decile"], "best 10% of μ draws",
+            va="center", fontsize=8.5, color=plots.INK_2)
+    ax.text(xs[-1] + 0.08, res[-1]["rows"][learn]["success_lowest_mu_decile"], "worst 10%",
+            va="center", fontsize=8.5, color=plots.INK_2)
+    ax.set_xticks(xs, [f"{x:.0f}%" for x in xs])
+    ax.set_xlim(-0.15, 3.9)
+    ax.set_ylim(0, 1)
+    ax.yaxis.set_major_formatter(lambda v, _: f"{int(round(100 * v))}%")
+    ax.set_xlabel("Uncertainty about the expected stock return (s.d. s)")
+    ax.set_ylabel("Chance of reaching the goal")
+    ax.set_title("The average barely moves; the range explodes")
+    ax.plot([], [], color=plots.INK_2, lw=1, ls=(0, (2, 2)), label="worst / best 10% of μ draws")
+    ax.legend(loc="lower left")
+
+    ax = axes[1]
+    t = np.arange(1, 41)
+    for s, color in zip(S_VALUES[1:], (plots.SEQ_BLUE[3], plots.SEQ_BLUE[5], plots.SEQ_BLUE[7])):
+        share = param_uncertainty.variance_share(s, B.sigma_stock, tuple(int(x) for x in t), B.mu_stock)
+        y = np.array([share[int(x)] for x in t])
+        ax.plot(t, y, color=color)
+        ax.text(t[-1] + 0.5, y[-1], f"s = {100 * s:.0f}%", va="center", fontsize=9, color=plots.INK_2)
+    ax.axvline(INVESTOR.horizon, color=plots.AXIS, lw=1)
+    ax.text(INVESTOR.horizon + 0.4, 0.02, "this plan", fontsize=8.5, color=plots.INK_2)
+    ax.set_xlim(0, 44)
+    ax.set_ylim(0, 0.6)
+    ax.yaxis.set_major_formatter(lambda v, _: f"{int(round(100 * v))}%")
+    ax.set_xlabel("Horizon (years)")
+    ax.set_ylabel("Share of variance")
+    ax.set_title("Not knowing μ: small for one year, large over decades")
+    fig.tight_layout()
+    plots.save(fig, FIGURES / "param_uncertainty.png")
+    return {"by_s": [{k: v for k, v in r.items() if k not in ("weights_by_year", "policy_year10")} for r in res],
+            "variance_share": {str(s): v for s, v in shares.items()}}
+
+
+def section_regime(n_paths: int) -> dict[str, Any]:
+    """3.2: two market regimes in the DP state; regime-blind policy; wrong persistence."""
+    model = regime.calibrated(B)
+    res = regime.experiment(INVESTOR, model, n_paths=n_paths)
+    starts = ["good", "bad", "long-run mix"]
+    names = ["Regime-aware DP", "Regime-blind DP (base case)", "Fixed 100% stock", "Fixed 60/40"]
+
+    def cell(start: str, name: str) -> str:
+        r = res["by_start"][start][name]
+        out = pct(r["success"])
+        if name != "Regime-aware DP":
+            out += f" ({pp(r['vs_aware'])})"
+        return out
+
+    table = md_table(["Policy"] + [f"Starts in {s} state" if s != "long-run mix" else "Start drawn from long-run mix"
+                                   for s in starts],
+                     [[name] + [cell(s, name) for s in starts] for name in names])
+    wrong = [k for k in res["by_start"]["long-run mix"] if k.startswith("Regime-aware, planned")]
+    mix = res["by_start"]["long-run mix"]
+    wrong_table = md_table(
+        ["Planned with stay probability", "Success (true stay = 0.9)", "Cost vs the right probability", "Avg. stock weight"],
+        [["0.9 (right)", pct(mix["Regime-aware DP"]["success"]), "—", pct(mix["Regime-aware DP"]["avg_stock_weight"], 0)]]
+        + [[k.split("= ")[1], pct(mix[k]["success"]), f"{100 * mix[k]['vs_aware']:+.2f} ± {100 * mix[k]['vs_aware_se']:.2f} pp",
+            pct(mix[k]["avg_stock_weight"], 0)] for k in sorted(wrong, key=lambda k: float(k.split("= ")[1]))],
+    )
+    g, b = res["good"], res["bad"]
+    write(
+        "regime",
+        f"Two market regimes — {n_paths:,} forward paths",
+        f"{table}\n\n### Planning with the wrong persistence\n\n{wrong_table}",
+        f"Good state: stocks {pct(g['mu_stock'])} expected, {pct(g['sigma_stock'])} volatility; bad state: "
+        f"{pct(b['mu_stock'])} and {pct(b['sigma_stock'])}; bonds 3% and 5% in both. Each state persists with "
+        f"probability {res['stay']:g} a year, and the 50/50 long-run mix has the base-case 7% and 16%. "
+        "The investor sees the current state. The regime-blind policy is the base-case DP. Brackets: paired "
+        "difference against the regime-aware policy. The DP's own estimate for the regime-aware policy is "
+        f"{pct(res['by_start']['good']['Regime-aware DP']['dp_value'])} starting good and "
+        f"{pct(res['by_start']['bad']['Regime-aware DP']['dp_value'])} starting bad.",
+    )
+
+    pol = res["policy"]
+    grid = np.array(pol["grid"])
+    fig, axes = plt.subplots(1, 4, figsize=(15, 4.4), gridspec_kw={"width_ratios": [1, 1, 1, 0.28]})
+    mesh = None
+    panels = [("good", f"Good state (stocks {pct(g['mu_stock'], 0)}, vol {pct(g['sigma_stock'], 0)})"),
+              ("bad", f"Bad state (stocks {pct(b['mu_stock'], 0)}, vol {pct(b['sigma_stock'], 0)})"),
+              ("blind", "Regime-blind (base case 7%, 16%)")]
+    for ax, (key, title) in zip(axes[:3], panels):
+        mesh = plots.policy_heatmap(ax, grid, np.array(pol[key]), title, goal=INVESTOR.goal, w_range=(2e4, 2e6))
+        ax.yaxis.set_major_formatter(plots.dollars)
+        ax.set_yticks([2e4, 5e4, 1e5, 2e5, 5e5, 1e6, 2e6])
+        ax.minorticks_off()
+        ax.set_xticks(range(0, INVESTOR.horizon + 1, 5))
+    for ax in axes[1:3]:
+        ax.set_yticklabels([])
+    axes[0].set_ylabel("Wealth")
+    cax = axes[3]
+    cax.axis("off")
+    bar_ax = cax.inset_axes([0.15, 0.1, 0.18, 0.8])
+    cb = fig.colorbar(mesh, cax=bar_ax, ticks=np.linspace(0, 1, 6))
+    cb.ax.set_yticklabels([f"{int(100 * x)}%" for x in np.linspace(0, 1, 6)])
+    cb.outline.set_visible(False)
+    cax.set_title("Stock weight", fontsize=10, loc="left")
+    fig.suptitle("Optimal stock weight when the investor knows the market state", x=0.01, ha="left",
+                 fontsize=13, fontweight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    plots.save(fig, FIGURES / "regime_policy.png")
+    res.pop("policy")
+    return res
+
+
+# --------------------------------------------------------------------------- #
 def _jsonable(obj: Any) -> Any:
     """Convert numpy types and drop large arrays for the JSON dump."""
     if isinstance(obj, dict):
@@ -721,7 +973,8 @@ def _jsonable(obj: Any) -> Any:
 
 def main() -> None:
     """Run the selected sections and write tables, figures and ``results/results.json``."""
-    sections = ["compare", "assumptions", "sensitivity", "dynamic", "cap", "precision", "saving"]
+    sections = ["compare", "assumptions", "sensitivity", "dynamic", "cap", "precision", "saving",
+                "resolve", "uncertainty", "regime"]
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--only", nargs="+", choices=sections, default=sections)
     parser.add_argument("--quick", action="store_true", help="20,000 forward paths instead of 100,000")
@@ -749,8 +1002,14 @@ def main() -> None:
             res = section_cap(n_paths)
         elif name == "precision":
             res = section_precision(n_paths, flags)
-        else:
+        elif name == "saving":
             res = section_saving(n_paths)
+        elif name == "resolve":
+            res = section_resolve(n_paths)
+        elif name == "uncertainty":
+            res = section_uncertainty(n_paths)
+        else:
+            res = section_regime(n_paths)
         results[name] = _jsonable(res)
         out_file.write_text(json.dumps(results, indent=1))
         print(f"[{name}] done in {time.time() - start:.0f}s")

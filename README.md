@@ -51,13 +51,14 @@ correlation 0.2, lognormal returns, yearly rebalancing, stock weight in steps of
 Standard error on each probability: 0.15 percentage points (pp). Full table:
 [results/strategy_comparison.md](results/strategy_comparison.md).
 
-Five findings, in order of importance:
+Six findings, in order of importance:
 
 1. **The expected stock return matters more than everything else combined.** One point less (6% instead of 7%) cuts the success probability from 62% to 52%. No other single parameter moves it by more than about 3 points. Across reasonable ways of setting expected returns the answer ranges from 62% to 98%.
 2. **The policy is far more robust than the probability.** A policy optimised for the base case and then run in a world with different returns loses less than 1 point against a policy re-optimised for that world. The model is reliable on *what to do*; it is only as good as the forecast on *how likely it is to work*.
 3. **A dynamic policy adds 7–10 points over the best fixed mix** for goals that are a stretch but reachable, and about 22 points over 60/40. In saving terms it is worth about $2,300 a year: reaching 75% takes $12,100 a year with the dynamic policy and $14,500 with 60/40.
 4. **The objective is a decision, not a detail.** "Maximise the chance of reaching the goal" and "maximise expected utility" produce very different policies (62% vs 38% success, but $323K vs $296K at the 10th percentile). The goal-probability policy gives up the upside to buy probability, and keeps full stock risk for anyone who falls behind.
 5. **A cap on the stock weight is expensive for this goal.** A maximum of 80% costs 8 points, 60% costs 20 points.
+6. **When the assumptions change, re-solve for the sake of the forecast.** If the expected stock return falls from 7% to 5% in year 10, re-solving adds only 0.2 points of success. It does correct the plan's own forecast from 62% to 51%, and getting back to 62% takes about $4,100 more saving a year. Uncertainty about the expected return leaves the policy unchanged; what it changes is how far the quoted probability can be trusted: at s = 2% the same policy succeeds 28% of the time if μ turns out in its worst tenth and 88% in its best. Knowing whether the market is in a good or a bad state would be worth 2.6 points, if the state could be observed ([section 6](#6-when-assumptions-change)).
 
 ## 1. Return assumptions come first
 
@@ -220,6 +221,122 @@ practical rules follow:
 - Report the forward-simulated number with its standard error, never the DP's own estimate.
 - Moment-match the scenario set (antithetic pairs, exact mean and variance of the shocks). The spread of the DP estimate drops from 2.6 pp to 0.1 pp ([table](results/mc_precision_dp.md)).
 
+## 6. When assumptions change
+
+Everything above solves the policy once, for one set of assumptions, and keeps
+it for 20 years. That raises two questions. What should happen if the
+assumptions change part-way through? And what if they were never known in the
+first place? This section tries three answers, from simplest to most involved.
+
+The policy is a table that is solved offline and looked up at run time. A
+table is only valid for the inputs it was solved with, so it is saved together
+with them:
+
+```python
+from gbda import analysis, policy
+
+table = policy.solve_policy(analysis.Investor(), analysis.World())  # offline, about 3 seconds
+policy.lookup(table, t=7, wealth=180_000)       # run time: 1.0, i.e. all stocks
+table.success_estimate(7, 180_000)              # the table's own estimate there: 70%
+policy.save(table, "base.npz")                  # arrays + investor, assumptions, solver settings, version
+```
+
+### Re-solve when the assumptions change
+
+![Re-solving](figures/resolve.png)
+
+At the start of each year, solve the remaining years again with the
+assumptions believed at that point, starting from current wealth. Each re-solve
+assumes the new assumptions will hold to the end. This is compared with keeping
+the original table, and with hindsight: an investor who knew about the change
+from the start, which is an upper bound. All of them run on the same 100,000
+paths, in which the expected stock return drops from 7% to 5% in year 10.
+
+| Approach | Chance of reaching $500K | vs keeping the table | Table's own forecast in year 10 |
+|---|---|---|---|
+| Keep the original table | 50.9% | — | 62.2% |
+| Re-solve every year | 51.1% | +0.2 pp | 51.2% |
+| Re-solve, but notice the change 3 years late | 51.0% | +0.1 pp | 51.2% (in year 13) |
+| Hindsight: change known from the start | 51.1% | +0.3 pp | 51.2% |
+| Fixed 100% stock / fixed 60/40 | 40.6% / 28.0% | | |
+
+Paired standard errors on the differences: 0.04–0.05 pp. Five different changes: [results/resolve.md](results/resolve.md).
+
+- **Re-solving barely changes the outcome.** It adds 0.2 points when the stock return drops to 5%, 1.4 points when it drops to 3%, and 0.7 points when stock volatility jumps from 16% to 24%. Hindsight is at most 0.2 points better than re-solving at once. This is finding 2 again: the shape of the policy (all stocks while behind, lock in once ahead) hardly depends on the exact numbers.
+- **Re-solving fixes the forecast.** In year 10 the original table still says 62%; the truth is 51%. The re-solved table says 51.2%, and 51.1% is what happens.
+- **That is the reason to do it.** Only more money closes the gap. To get back to the 62% the plan started with, saving has to rise from $10,000 to about $14,100 a year for the last ten years.
+- **Check.** Re-solving with *unchanged* assumptions gives back the rest of the original table exactly (the optimality principle: the tail of an optimal policy is optimal for the tail problem). In the first experiment the plan really was re-solved every year, and all nine re-solves before the change reproduced the original table bit for bit. So in practice a re-solve is only needed when the assumptions change. The [three-period example](docs/worked_example.md#when-the-coin-changes-re-solve-the-rest) shows the same thing by hand.
+
+### Admit that the expected return is not known
+
+![Parameter uncertainty](figures/param_uncertainty.png)
+
+Now each simulated path draws its own expected stock return, roughly
+N(7%, s²), and keeps it for all 20 years. For scale, s = 2% is about the
+standard error of a 100-year historical average (16% / √98 ≈ 1.6%). The
+investor starts from the same prior and updates it every year from the stock's
+return. With a normal prior and known volatility the update is a running
+weighted average. The DP state becomes (year, wealth, current estimate of the
+expected return).
+
+| s | Dynamic, learns μ | Dynamic, ignores the uncertainty | Fixed 60/40 | DP's own estimate (learns / ignores) | Dynamic, worst / best 10% of μ draws |
+|---|---|---|---|---|---|
+| 0% | 62.2% | 62.2% | 39.7% | 62.1% / 62.1% | 62% / 62% |
+| 1% | 61.7% | 61.7% | 39.9% | 61.6% / 62.1% | 44% / 78% |
+| 2% | 60.7% | 60.8% | 40.8% | 60.5% / 62.1% | 28% / 88% |
+| 3% | 59.6% | 59.6% | 41.7% | 59.2% / 62.1% | 15% / 94% |
+
+Full table, including all stocks: [results/param_uncertainty.md](results/param_uncertainty.md).
+
+- **The policy does not change.** Learning the expected return and ignoring the uncertainty give the same success to within 0.03 points, and the same average stock weight (80–81%). Learning is slow: with 16% volatility one year of returns says little about the mean, so after 20 years the estimate (at s = 2%) still puts three-quarters of its weight on the prior. One might expect the policy to turn more conservative, as it does for a long-horizon buy-and-hold investor in Barberis (2000). For this goal it does not.
+- **The average success falls a little**, from 62% to 61% at s = 2%. The learning DP's own estimate sees this coming (60.5%); the base DP keeps reporting 62%.
+- **The real change is in the range.** At s = 2% the same policy reaches the goal 28% of the time on paths whose μ came out in the worst tenth, and 88% in the best tenth. A single success probability hides this range.
+- **Why the horizon matters.** Over T years the variance of the cumulative log return is Tσ² + T²τ², where τ is the uncertainty about μ. The first term grows with T and the second with T². At s = 2%, not knowing μ is 2% of the variance over one year, 24% over 20 years and 32% over 30 (right panel).
+- 60/40 *gains* from the uncertainty (39.7% → 41.7%). Its typical outcome falls short of the goal, so a wider spread of outcomes pushes more paths over it.
+
+### Put the market state into the DP (regimes)
+
+![Regime policies](figures/regime_policy.png)
+
+This model has two market states:
+
+- **good:** stocks return 10% expected with 12% volatility;
+- **bad:** stocks return 4% with 18.7% volatility.
+
+Bonds are the same in both. Each year the state stays the same with probability
+0.9, so a state lasts ten years on average. The long-run 50/50 mix has the base
+case's 7% and 16%. The investor sees the state at the start of each year, and
+the DP state becomes (year, wealth, market state).
+
+| Policy | Starts in the good state | Starts in the bad state | Start drawn from the long-run mix |
+|---|---|---|---|
+| Regime-aware DP | 72.4% | 59.9% | 66.1% |
+| Regime-blind DP (the base-case policy) | 69.8% | 57.5% | 63.5% |
+| Fixed 100% stock | 61.9% | 50.8% | 56.2% |
+| Fixed 60/40 | 47.9% | 37.8% | 42.8% |
+
+Full tables: [results/regime.md](results/regime.md).
+
+- **The two tables are very different.** In year 0 the good-state policy holds 100% stocks up to about $230K, the bad-state policy only up to about $41K (regime-blind: about $132K). In the bad state stocks earn 1 point more than bonds for almost four times the volatility. So even an investor who is behind holds mostly bonds and waits for the good state.
+- **Knowing the state is worth 2.6 points** (paired s.e. 0.09) over the regime-blind policy, whichever state the market starts in.
+- **Getting the persistence wrong costs little.** Planning with a stay probability of 0.5 (no persistence) instead of the true 0.9 costs 0.7 points; 0.99 costs 0.5; 0.75 or 0.95 cost 0.1–0.3. Most of the gain comes from knowing which state the market is in now, not how long it will last.
+- **The big caveat: the state is assumed to be observed.** In practice it has to be inferred from returns, and one year of returns says little because the two states overlap heavily (10% ± 12% against 4% ± 19%). So 2.6 points is an upper bound on what regime information is worth here.
+
+### Which one to use
+
+| | Re-solve | Parameter uncertainty | Regimes |
+|---|---|---|---|
+| Idea | recompute when the assumptions change | admit μ is unknown, learn it | plan for the market switching |
+| Extra DP state | none | estimate of μ | market state |
+| Solve time | about 3 s per re-solve | about 45 s (13 belief points) | about 15 s (2 states) |
+| What it changed here | the forecast (62% → 51%), and so the saving needed | the forecast and its range, not the policy | the policy (+2.6 pp), if the state can be seen |
+| Check that it reduces to the base model | unchanged assumptions → original table | s = 0 → base model | two identical states → base model |
+
+For this problem the practical order is: **re-solve whenever the assumptions
+change** (cheap, and it keeps the quoted probability honest); **report the
+success probability as a range** that reflects uncertainty about μ; and use a
+regime model only if the state can actually be identified in real time.
+
 ## Method
 
 New to dynamic programming, or want to see the recursion run once by hand? [A three-period example](docs/worked_example.md) solves a tiny version of the problem on paper (62.5% against 50% for a fixed rule) and shows how it maps onto the full one.
@@ -234,7 +351,7 @@ New to dynamic programming, or want to see the recursion run once by hand? [A th
 
 I first checked the code on a simple two-outcome market where the answers can
 be worked out by hand; the stock/bond problem then runs through the same solver.
-`pytest` runs 59 checks, including:
+`pytest` runs 78 checks, including:
 
 - the three-period example: the engine reproduces every number in the hand calculation;
 - the simple market: the optimal policy under log and power utility is one fixed mix at every date and wealth level and matches the closed-form weight; the sampled-expectation DP converges to the exact one; the goal-probability DP is bracketed between a lower and an upper bound, and forward simulation lands inside the bracket;
@@ -243,13 +360,16 @@ be worked out by hand; the stock/bond problem then runs through the same solver.
 - zero volatility → the simulation reproduces deterministic compounding to machine precision;
 - saving more never lowers the success probability; a cap never raises it;
 - the DP's estimate agrees with out-of-sample simulation (62.1% vs 62.2% ± 0.15%);
+- re-solving with unchanged assumptions reproduces the rest of the original table exactly; a change known in advance gives the same rows as a re-solve on the date of the change; re-solving every year and only when the assumptions change give identical paths;
+- zero parameter uncertainty and two identical regimes each reduce to the base model exactly; the belief update equals the closed-form Bayesian posterior, and the DP's belief transitions keep the expected next belief equal to today's;
+- a saved policy table loads back identically, inputs included;
 - each generator hits its target mean, volatility and correlation; the bootstrap keeps stock and bond returns paired and years consecutive within a block.
 
 ## Limitations and next steps
 
 - **Nominal, pre-tax, no costs.** Inflation, taxes, fees and transaction costs are ignored. With trading costs the policy would get a no-trade band around its current weight.
-- **Returns are independent across years inside the DP.** The block bootstrap tests the policy against serial dependence but the policy does not exploit it. A regime or valuation state would be the next state variable.
-- **Parameter uncertainty is outside the optimisation.** The DP treats its assumptions as known; uncertainty enters only through the sensitivity tables. A robust version would optimise across several assumption sets at once.
+- **The regime model assumes the market state is observed.** Section 6 adds a good/bad state to the DP, but in practice the state has to be inferred from returns. The next step is a hidden-state version, in which the DP state is the probability of being in the bad state, updated by Bayes' rule each year. The solver already handles a belief state (section 6 uses one for μ). The block bootstrap still tests the policy against serial dependence that no model here exploits.
+- **Parameter uncertainty covers the expected stock return only.** Volatilities, the correlation and bond returns are treated as known, and the investor learns from stock returns alone (bond returns would add a little information through the correlation). Each re-solve in section 6 also assumes the new assumptions then hold forever.
 - **Two assets, yearly rebalancing, 10% weight steps, no borrowing.**
 - **Savings are certain** and the goal is all-or-nothing. A natural extension is a blended objective (probability of success plus a penalty on the size of a miss), which would address the behaviour in section 3.
 - **History is one country, 98 years.** The bootstrap can only replay what is in that record.
@@ -269,9 +389,10 @@ python -m pytest tests -q
 python run.py
 ```
 
-`python run.py` takes about four minutes on a 10-core laptop and rewrites every
+`python run.py` takes about nine minutes on a 10-core laptop and rewrites every
 table in `results/` and figure in `figures/`. `python run.py --only sensitivity`
-runs one section; `python -m gbda.binomial` runs the simple-market check.
+runs one section (`--only resolve uncertainty regime` runs section 6, about five
+minutes); `python -m gbda.binomial` runs the simple-market check.
 
 ## Layout
 
@@ -282,12 +403,16 @@ gbda/
   simulate.py    forward simulation of any policy (DP table, fixed mix, glide path)
   metrics.py     success probability and standard error, quantiles, certainty equivalent
   analysis.py    the investor problem and the experiments, parallel runner
+  policy.py      policy tables: solve offline, look up at run time, save/load with their inputs
+  resolve.py     assumptions that change mid-plan: keep the table, re-solve, hindsight
+  param_uncertainty.py  expected stock return unknown: per-path draws, a policy that learns it
+  regime.py      good and bad market states as a second DP state variable
   binomial.py    the simple two-outcome market used to check the engine
   worked_example.py  the three-period example, by hand and by the engine
   plots.py       shared chart style
 run.py           runs every experiment; writes results/ and figures/
-tests/           59 checks
-docs/            worked_example.md: the recursion done by hand on a three-period problem
+tests/           78 checks
+docs/            worked_example.md: the recursion done by hand on a three-period problem, and a re-solve
 data/            annual US stock, bill and bond returns, 1928–2025 (source in data/SOURCE.md)
 results/         tables (Markdown) and results.json with every number
 figures/         charts used above; figures/validation/ for the simple market

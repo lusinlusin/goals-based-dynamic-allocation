@@ -194,6 +194,33 @@ def student_params(mu: float, sigma: float, df: float) -> tuple[float, float]:
     return float(sol.x[0]), float(sol.x[1])
 
 
+def _shocks(rng: np.random.Generator, size: int | tuple[int, ...], moment_match: bool) -> tuple[Array, Array]:
+    """Two independent standard normal shock arrays (see ``moment_match`` in :func:`sample_returns`)."""
+    if moment_match:
+        if not isinstance(size, (int, np.integer)) or size % 2:
+            raise ValueError("moment_match needs a one-dimensional sample of even size")
+        half = int(size) // 2
+        z1 = rng.standard_normal(half)
+        z2 = rng.standard_normal(half)
+        z1 = np.concatenate([z1, -z1])
+        z2 = np.concatenate([z2, -z2])
+        z1 /= z1.std()
+        z2 -= (z1 @ z2) / (z1 @ z1) * z1
+        z2 /= z2.std()
+        return z1, z2
+    return rng.standard_normal(size), rng.standard_normal(size)
+
+
+def standard_shocks(size: int | tuple[int, ...], seed: int, moment_match: bool = False) -> tuple[Array, Array]:
+    """The independent standard normal shocks behind :func:`sample_returns` for this seed.
+
+    ``sample_returns(a, size, seed)`` is a deterministic transform of these two
+    arrays (for lognormal returns), so models built directly on the shocks share
+    common random numbers with it.
+    """
+    return _shocks(np.random.default_rng(seed), size, moment_match)
+
+
 def sample_returns(
     assumptions: Assumptions,
     size: int | tuple[int, ...],
@@ -224,20 +251,7 @@ def sample_returns(
         ``(stock gross returns, bond gross returns)``, each of shape ``size``.
     """
     rng = np.random.default_rng(seed)
-    if moment_match:
-        if not isinstance(size, (int, np.integer)) or size % 2:
-            raise ValueError("moment_match needs a one-dimensional sample of even size")
-        half = int(size) // 2
-        z1 = rng.standard_normal(half)
-        z2 = rng.standard_normal(half)
-        z1 = np.concatenate([z1, -z1])
-        z2 = np.concatenate([z2, -z2])
-        z1 /= z1.std()
-        z2 -= (z1 @ z2) / (z1 @ z1) * z1
-        z2 /= z2.std()
-    else:
-        z1 = rng.standard_normal(size)
-        z2 = rng.standard_normal(size)
+    z1, z2 = _shocks(rng, size, moment_match)
     rho = assumptions.rho
     zs, zb = z1, rho * z1 + np.sqrt(1.0 - rho * rho) * z2
     if dist == "lognormal":

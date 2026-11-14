@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from itertools import product
 from pathlib import Path
+from typing import Callable, Sequence
 
 import numpy as np
 
@@ -34,20 +35,23 @@ CASH, RISK = 0.0, 1.0
 ACTION_NAMES = {CASH: "hold cash", RISK: "take risk"}
 
 
-def scenarios() -> dp.ReturnScenarios:
+def scenarios(up: float = UP, down: float = DOWN) -> dp.ReturnScenarios:
     """Heads and tails with probability 1/2: the risky asset moves, cash does not."""
-    return dp.ReturnScenarios(r_a=np.array([UP, DOWN]), r_b=np.array([1.0, 1.0]), probs=np.array([0.5, 0.5]))
+    return dp.ReturnScenarios(r_a=np.array([up, down]), r_b=np.array([1.0, 1.0]), probs=np.array([0.5, 0.5]))
 
 
-def solve(n_grid: int = 4000) -> dp.DPSolution:
+def solve(n_grid: int = 4000, up: float = UP, periods: int = PERIODS) -> dp.DPSolution:
     """Solve the three-period problem with the project's DP engine.
 
     The value function is a staircase in wealth, so the grid is read with
     ``interp="floor"``. Every wealth level that can occur is at least 5% away from
     a step, far more than the grid spacing, so the values at those levels are exact.
+
+    ``up`` and ``periods`` change the coin and the number of periods left; they
+    are used to re-solve part-way through (see :func:`resolve_demo`).
     """
     grid = dp.log_grid(0.2, 5.0, n_grid, include=GOAL)
-    return dp.solve(scenarios(), np.array([CASH, RISK]), grid, dp.goal_objective(GOAL), PERIODS, interp="floor")
+    return dp.solve(scenarios(up), np.array([CASH, RISK]), grid, dp.goal_objective(GOAL), periods, interp="floor")
 
 
 def engine_value(solution: dp.DPSolution, t: int, wealth: float) -> float:
@@ -72,19 +76,66 @@ def hand_value(t: int, wealth: float) -> tuple[float, float, float]:
     return max(hold, risk), hold, risk
 
 
-def path_success(policy: dp.DPSolution | float) -> float:
+def path_success(policy: dp.DPSolution | float | Callable[[int, float], float], ups: Sequence[float] | None = None) -> float:
     """Exact success probability of a policy by listing all eight coin sequences.
 
-    ``policy`` is either a DP solution or a fixed weight in the risky asset.
+    ``policy`` is a DP solution, a fixed weight in the risky asset, or any
+    ``policy(t, wealth) -> weight``. ``ups`` gives the heads multiplier in each
+    period (default ``UP`` throughout); tails is always ``DOWN``.
     """
+    ups = [UP] * PERIODS if ups is None else list(ups)
     wins = 0
-    for flips in product((UP, DOWN), repeat=PERIODS):
+    for heads in product((True, False), repeat=PERIODS):
         wealth = W0
-        for t, move in enumerate(flips):
-            a = policy if isinstance(policy, float) else float(policy.action(t, wealth))
-            wealth *= a * move + (1.0 - a)
+        for t, h in enumerate(heads):
+            if isinstance(policy, float):
+                a = policy
+            elif isinstance(policy, dp.DPSolution):
+                a = float(policy.action(t, wealth))
+            else:
+                a = float(policy(t, wealth))
+            wealth *= a * (ups[t] if h else DOWN) + (1.0 - a)
         wins += wealth >= GOAL - 1e-12
     return wins / 2**PERIODS
+
+
+# --------------------------------------------------------------------------- #
+# The coin changes part-way through: re-solve the remaining periods
+# --------------------------------------------------------------------------- #
+#: After the first period it turns out heads pays x1.3, not x1.4.
+NEW_UP = 1.3
+
+
+def resolve_demo() -> dict[str, float]:
+    """Re-solve at time 1 with the new coin and compare with keeping the original table.
+
+    At time 1 with wealth 0.7 the original table still says "take risk, 25%".
+    Re-solved with heads at x1.3, the last period's threshold becomes 1.3 / 1.3
+    = 1.0; one head from 0.7 reaches only 0.91, so the chance is 0. The action
+    does not change (the goal is out of reach either way); the forecast does.
+    The same check as in the full model also holds here: re-solving at time 1
+    with the *old* coin gives back the original table's last two periods.
+    """
+    original = solve()
+    resolved = solve(up=NEW_UP, periods=PERIODS - 1)
+    unchanged = solve(periods=PERIODS - 1)
+    ups = [UP] + [NEW_UP] * (PERIODS - 1)
+
+    def rolling(t: int, wealth: float) -> float:
+        return float(original.action(0, wealth)) if t == 0 else float(resolved.action(t - 1, wealth))
+
+    return {
+        "original_forecast_at_0.7": engine_value(original, 1, 0.7),
+        "resolved_forecast_at_0.7": engine_value(resolved, 0, 0.7),
+        "original_forecast_at_1.4": engine_value(original, 1, 1.4),
+        "resolved_forecast_at_1.4": engine_value(resolved, 0, 1.4),
+        "plan_promised": engine_value(original, 0, W0),
+        "keep_table_success": path_success(original, ups),
+        "resolve_success": path_success(rolling, ups),
+        "unchanged_resolve_matches": float(
+            np.array_equal(unchanged.policy, original.policy[1:]) and np.array_equal(unchanged.value, original.value[1:])
+        ),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -164,6 +215,13 @@ def main(figure_path: str | Path = "figures/worked_example_tree.png") -> None:
     print(f"Dynamic policy, all 8 coin sequences: {path_success(solution):.1%}")
     print(f"Always take risk:                    {path_success(RISK):.1%}")
     print(f"Always hold cash:                    {path_success(CASH):.1%}")
+    demo = resolve_demo()
+    print(f"\nAfter period 1 heads turns out to pay x{NEW_UP}; re-solve the last two periods:")
+    print(f"  wealth 0.7: original table {demo['original_forecast_at_0.7']:.0%}, re-solved {demo['resolved_forecast_at_0.7']:.0%}")
+    print(f"  wealth 1.4: original table {demo['original_forecast_at_1.4']:.0%}, re-solved {demo['resolved_forecast_at_1.4']:.0%}")
+    print(f"  plan promised {demo['plan_promised']:.1%}; keeping the table gets {demo['keep_table_success']:.1%}, "
+          f"re-solving gets {demo['resolve_success']:.1%}")
+    print(f"  re-solving with the old coin gives back the original table: {bool(demo['unchanged_resolve_matches'])}")
     _figure_tree(Path(figure_path), solution)
     print(f"\nTree written to {figure_path}")
 

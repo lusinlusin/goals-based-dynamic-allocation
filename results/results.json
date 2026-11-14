@@ -1796,5 +1796,789 @@
     "glide_success": 0.97514
    }
   ]
+ },
+ "resolve": {
+  "runs": [
+   {
+    "shock": {
+     "label": "Stock return 7% \u2192 5% from year 10",
+     "year": 10,
+     "changes": {
+      "mu_stock": 0.05
+     }
+    },
+    "before": {
+     "mu_stock": 0.07,
+     "sigma_stock": 0.16
+    },
+    "rows": {
+     "Keep the original table": {
+      "success": 0.50872,
+      "success_se": 0.0015808983572639956,
+      "vs_original": 0.0,
+      "vs_original_se": 0.0,
+      "avg_stock_after_change": 0.7051805000000003,
+      "forecast_at_change": 0.622362277554498
+     },
+     "Re-solve every year": {
+      "success": 0.51088,
+      "success_se": 0.0015807644530416289,
+      "vs_original": 0.00216,
+      "vs_original_se": 0.0004904648300923273,
+      "avg_stock_after_change": 0.6738712,
+      "forecast_at_change": 0.511942181865975
+     },
+     "Re-solve, change noticed 3 years late": {
+      "success": 0.50986,
+      "success_se": 0.0015808313648204226,
+      "vs_original": 0.00114,
+      "vs_original_se": 0.00044360903044203103,
+      "avg_stock_after_change": 0.6871298999999997,
+      "forecast_at_change": 0.5118989620814435
+     },
+     "Hindsight: changes known from the start": {
+      "success": 0.51143,
+      "success_se": 0.001580725640647358,
+      "vs_original": 0.00271,
+      "vs_original_se": 0.000516361525766834,
+      "avg_stock_after_change": 0.6726262,
+      "forecast_at_change": 0.5124438443979733
+     },
+     "Fixed 100% stock": {
+      "success": 0.40582,
+      "success_se": 0.001552836525845525,
+      "vs_original": -0.1029,
+      "vs_original_se": 0.0010335988502634048,
+      "avg_stock_after_change": 1.0,
+      "forecast_at_change": NaN
+     },
+     "Fixed 60/40": {
+      "success": 0.28047,
+      "success_se": 0.0014205864250372098,
+      "vs_original": -0.22825,
+      "vs_original_se": 0.0013347423685385515,
+      "avg_stock_after_change": 0.5999999999999999,
+      "forecast_at_change": NaN
+     }
+    },
+    "tail_checks": {
+     "Re-solve every year": true,
+     "Re-solve, change noticed 3 years late": true
+    }
+   },
+   {
+    "shock": {
+     "label": "Stock return 7% \u2192 3% from year 10",
+     "year": 10,
+     "changes": {
+      "mu_stock": 0.03
+     }
+    },
+    "before": {
+     "mu_stock": 0.07,
+     "sigma_stock": 0.16
+    },
+    "rows": {
+     "Keep the original table": {
+      "success": 0.40236,
+      "success_se": 0.0015506980054156257,
+      "vs_original": 0.0,
+      "vs_original_se": 0.0,
+      "avg_stock_after_change": 0.7509779,
+      "forecast_at_change": 0.622362277554498
+     },
+     "Re-solve every year": {
+      "success": 0.41645,
+      "success_se": 0.0015589079430806682,
+      "vs_original": 0.01409,
+      "vs_original_se": 0.0009078121833449923,
+      "avg_stock_after_change": 0.6464717999999999,
+      "forecast_at_change": 0.4154136954974813
+     },
+     "Re-solve, change noticed 3 years late": {
+      "success": 0.41202,
+      "success_se": 0.0015564688226880742,
+      "vs_original": 0.00966,
+      "vs_original_se": 0.0007781213907411795,
+      "avg_stock_after_change": 0.6926123000000001,
+      "forecast_at_change": 0.41142592251070564
+     },
+     "Hindsight: changes known from the start": {
+      "success": 0.41869,
+      "success_se": 0.0015600919328680604,
+      "vs_original": 0.01633,
+      "vs_original_se": 0.0009039034690799753,
+      "avg_stock_after_change": 0.6477042,
+      "forecast_at_change": 0.4168708145373238
+     },
+     "Fixed 100% stock": {
+      "success": 0.28162,
+      "success_se": 0.001422357815741173,
+      "vs_original": -0.12074,
+      "vs_original_se": 0.0010763968182325248,
+      "avg_stock_after_change": 1.0,
+      "forecast_at_change": NaN
+     },
+     "Fixed 60/40": {
+      "success": 0.1866,
+      "success_se": 0.0012319920454288656,
+      "vs_original": -0.21576,
+      "vs_original_se": 0.0013070934583774374,
+      "avg_stock_after_change": 0.5999999999999999,
+      "forecast_at_change": NaN
+     }
+    },
+    "tail_checks": {
+     "Re-solve every year": true,
+     "Re-solve, change noticed 3 years late": true
+    }
+   },
+   {
+    "shock": {
+     "label": "Stock return 7% \u2192 5% from year 5",
+     "year": 5,
+     "changes": {
+      "mu_stock": 0.05
+     }
+    },
+    "before": {
+     "mu_stock": 0.07,
+     "sigma_stock": 0.16
+    },
+    "rows": {
+     "Keep the original table": {
+      "success": 0.45308,
+      "success_se": 0.0015741617248554863,
+      "vs_original": 0.0,
+      "vs_original_se": 0.0,
+      "avg_stock_after_change": 0.8213577999999999,
+      "forecast_at_change": 0.6226424452112733
+     },
+     "Re-solve every year": {
+      "success": 0.45557,
+      "success_se": 0.0015748840436679774,
+      "vs_original": 0.00249,
+      "vs_original_se": 0.0004819131886587189,
+      "avg_stock_after_change": 0.7978520000000001,
+      "forecast_at_change": 0.45521743255452396
+     },
+     "Re-solve, change noticed 3 years late": {
+      "success": 0.45533,
+      "success_se": 0.0015748161514919767,
+      "vs_original": 0.00225,
+      "vs_original_se": 0.00047544887792101817,
+      "avg_stock_after_change": 0.8004704000000006,
+      "forecast_at_change": 0.4549957579082747
+     },
+     "Hindsight: changes known from the start": {
+      "success": 0.45543,
+      "success_se": 0.001574844484703172,
+      "vs_original": 0.00235,
+      "vs_original_se": 0.00048295663104576446,
+      "avg_stock_after_change": 0.7978457333333334,
+      "forecast_at_change": 0.45522705673604896
+     },
+     "Fixed 100% stock": {
+      "success": 0.35858,
+      "success_se": 0.0015165763535015307,
+      "vs_original": -0.0945,
+      "vs_original_se": 0.0009974504744971002,
+      "avg_stock_after_change": 1.0,
+      "forecast_at_change": NaN
+     },
+     "Fixed 60/40": {
+      "success": 0.24475,
+      "success_se": 0.001359586104297922,
+      "vs_original": -0.20833,
+      "vs_original_se": 0.001292634062690675,
+      "avg_stock_after_change": 0.6,
+      "forecast_at_change": NaN
+     }
+    },
+    "tail_checks": {
+     "Re-solve every year": true,
+     "Re-solve, change noticed 3 years late": true
+    }
+   },
+   {
+    "shock": {
+     "label": "Stock return 7% \u2192 9% from year 10",
+     "year": 10,
+     "changes": {
+      "mu_stock": 0.09
+     }
+    },
+    "before": {
+     "mu_stock": 0.07,
+     "sigma_stock": 0.16
+    },
+    "rows": {
+     "Keep the original table": {
+      "success": 0.73004,
+      "success_se": 0.0014038575369317216,
+      "vs_original": 0.0,
+      "vs_original_se": 0.0,
+      "avg_stock_after_change": 0.6043188999999999,
+      "forecast_at_change": 0.622362277554498
+     },
+     "Re-solve every year": {
+      "success": 0.73085,
+      "success_se": 0.0014025272813745907,
+      "vs_original": 0.00081,
+      "vs_original_se": 0.00036999298364709496,
+      "avg_stock_after_change": 0.6329026000000003,
+      "forecast_at_change": 0.7304428493325703
+     },
+     "Re-solve, change noticed 3 years late": {
+      "success": 0.73069,
+      "success_se": 0.0014027905185736037,
+      "vs_original": 0.00065,
+      "vs_original_se": 0.00035028131832859675,
+      "avg_stock_after_change": 0.6242432,
+      "forecast_at_change": 0.7309735737041516
+     },
+     "Hindsight: changes known from the start": {
+      "success": 0.73159,
+      "success_se": 0.0014013067897501962,
+      "vs_original": 0.00155,
+      "vs_original_se": 0.00043344879026078483,
+      "avg_stock_after_change": 0.638457,
+      "forecast_at_change": 0.7310295850268846
+     },
+     "Fixed 100% stock": {
+      "success": 0.67555,
+      "success_se": 0.001480480319018122,
+      "vs_original": -0.05449,
+      "vs_original_se": 0.0008558129019576833,
+      "avg_stock_after_change": 1.0,
+      "forecast_at_change": NaN
+     },
+     "Fixed 60/40": {
+      "success": 0.52361,
+      "success_se": 0.0015793750912940219,
+      "vs_original": -0.20643,
+      "vs_original_se": 0.0012926651773884094,
+      "avg_stock_after_change": 0.5999999999999999,
+      "forecast_at_change": NaN
+     }
+    },
+    "tail_checks": {
+     "Re-solve every year": true,
+     "Re-solve, change noticed 3 years late": true
+    }
+   },
+   {
+    "shock": {
+     "label": "Stock volatility 16% \u2192 24% from year 10",
+     "year": 10,
+     "changes": {
+      "sigma_stock": 0.24
+     }
+    },
+    "before": {
+     "mu_stock": 0.07,
+     "sigma_stock": 0.16
+    },
+    "rows": {
+     "Keep the original table": {
+      "success": 0.60927,
+      "success_se": 0.0015429195283617355,
+      "vs_original": 0.0,
+      "vs_original_se": 0.0,
+      "avg_stock_after_change": 0.6421124,
+      "forecast_at_change": 0.622362277554498
+     },
+     "Re-solve every year": {
+      "success": 0.61665,
+      "success_se": 0.001537506999984065,
+      "vs_original": 0.00738,
+      "vs_original_se": 0.0006345544756707857,
+      "avg_stock_after_change": 0.5760451,
+      "forecast_at_change": 0.6171704469864469
+     },
+     "Re-solve, change noticed 3 years late": {
+      "success": 0.61476,
+      "success_se": 0.0015389286611146079,
+      "vs_original": 0.00549,
+      "vs_original_se": 0.0005531741669823259,
+      "avg_stock_after_change": 0.6004625000000001,
+      "forecast_at_change": 0.6159674100014814
+     },
+     "Hindsight: changes known from the start": {
+      "success": 0.61738,
+      "success_se": 0.0015369513186825404,
+      "vs_original": 0.00811,
+      "vs_original_se": 0.0006362753550651437,
+      "avg_stock_after_change": 0.5748922000000002,
+      "forecast_at_change": 0.6176852337643802
+     },
+     "Fixed 100% stock": {
+      "success": 0.46492,
+      "success_se": 0.001577242510205707,
+      "vs_original": -0.14435,
+      "vs_original_se": 0.0011405892268638365,
+      "avg_stock_after_change": 1.0,
+      "forecast_at_change": NaN
+     },
+     "Fixed 60/40": {
+      "success": 0.38176,
+      "success_se": 0.0015362919722500669,
+      "vs_original": -0.22751,
+      "vs_original_se": 0.0013333078324594663,
+      "avg_stock_after_change": 0.5999999999999999,
+      "forecast_at_change": NaN
+     }
+    },
+    "tail_checks": {
+     "Re-solve every year": true,
+     "Re-solve, change noticed 3 years late": true
+    }
+   }
+  ],
+  "promised": 0.6214986499455343,
+  "catch_up_saving": 14101.5625
+ },
+ "uncertainty": {
+  "by_s": [
+   {
+    "s": 0.0,
+    "rows": {
+     "Learns the expected return": {
+      "success": 0.62199,
+      "success_se": 0.0015333572313717375,
+      "vs_ignore": 0.0,
+      "vs_ignore_se": 0.0,
+      "avg_stock_weight": 0.8138091999999999,
+      "success_lowest_mu_decile": 0.62199,
+      "success_highest_mu_decile": 0.62199,
+      "dp_value": 0.6207451474502745
+     },
+     "Ignores the uncertainty": {
+      "success": 0.62199,
+      "success_se": 0.0015333572313717375,
+      "vs_ignore": 0.0,
+      "vs_ignore_se": 0.0,
+      "avg_stock_weight": 0.8138091999999999,
+      "success_lowest_mu_decile": 0.62199,
+      "success_highest_mu_decile": 0.62199,
+      "dp_value": 0.6207451474502745
+     },
+     "Fixed 100% stock": {
+      "success": 0.54417,
+      "success_se": 0.0015749571775130903,
+      "vs_ignore": -0.07782,
+      "vs_ignore_se": 0.0009444836666104739,
+      "avg_stock_weight": 1.0,
+      "success_lowest_mu_decile": 0.54417,
+      "success_highest_mu_decile": 0.54417
+     },
+     "Fixed 60/40": {
+      "success": 0.39655,
+      "success_se": 0.001546926299149381,
+      "vs_ignore": -0.22544,
+      "vs_ignore_se": 0.0013314600226285122,
+      "avg_stock_weight": 0.5999999999999999,
+      "success_lowest_mu_decile": 0.39655,
+      "success_highest_mu_decile": 0.39655
+     }
+    },
+    "mu_deciles": [
+     0.07,
+     0.07,
+     0.07,
+     0.07,
+     0.07,
+     0.07,
+     0.07,
+     0.07,
+     0.07,
+     0.07,
+     0.07
+    ]
+   },
+   {
+    "s": 0.01,
+    "rows": {
+     "Learns the expected return": {
+      "success": 0.6173,
+      "success_se": 0.001537012394224588,
+      "vs_ignore": 0.00029,
+      "vs_ignore_se": 0.00016339958994520133,
+      "avg_stock_weight": 0.81282945,
+      "success_lowest_mu_decile": 0.4365,
+      "success_highest_mu_decile": 0.7788,
+      "dp_value": 0.6163226546171703
+     },
+     "Ignores the uncertainty": {
+      "success": 0.61701,
+      "success_se": 0.0015372334237193778,
+      "vs_ignore": 0.0,
+      "vs_ignore_se": 0.0,
+      "avg_stock_weight": 0.8128006499999999,
+      "success_lowest_mu_decile": 0.4364,
+      "success_highest_mu_decile": 0.7776,
+      "dp_value": 0.6207451474502745
+     },
+     "Fixed 100% stock": {
+      "success": 0.54107,
+      "success_se": 0.0015757958468659574,
+      "vs_ignore": -0.07594,
+      "vs_ignore_se": 0.0009333487426459383,
+      "avg_stock_weight": 1.0,
+      "success_lowest_mu_decile": 0.3574,
+      "success_highest_mu_decile": 0.716
+     },
+     "Fixed 60/40": {
+      "success": 0.39917,
+      "success_se": 0.0015486552589262725,
+      "vs_ignore": -0.21784,
+      "vs_ignore_se": 0.0013147907174703916,
+      "avg_stock_weight": 0.5999999999999999,
+      "success_lowest_mu_decile": 0.2391,
+      "success_highest_mu_decile": 0.567
+     }
+    },
+    "mu_deciles": [
+     0.02567708470128082,
+     0.0572766848944049,
+     0.0616678251722294,
+     0.06475987789502086,
+     0.06747831851498931,
+     0.07000280090832003,
+     0.07254718558250253,
+     0.07525279188090823,
+     0.07837833954665076,
+     0.08283645067653557,
+     0.11464853228769074
+    ]
+   },
+   {
+    "s": 0.02,
+    "rows": {
+     "Learns the expected return": {
+      "success": 0.60727,
+      "success_se": 0.0015443223339057168,
+      "vs_ignore": -0.00029,
+      "vs_ignore_se": 0.00024515252394703176,
+      "avg_stock_weight": 0.81248315,
+      "success_lowest_mu_decile": 0.2784,
+      "success_highest_mu_decile": 0.8792,
+      "dp_value": 0.6051606405813219
+     },
+     "Ignores the uncertainty": {
+      "success": 0.60756,
+      "success_se": 0.0015441206118694225,
+      "vs_ignore": 0.0,
+      "vs_ignore_se": 0.0,
+      "avg_stock_weight": 0.8096129,
+      "success_lowest_mu_decile": 0.2782,
+      "success_highest_mu_decile": 0.8791,
+      "dp_value": 0.6207451474502745
+     },
+     "Fixed 100% stock": {
+      "success": 0.53634,
+      "success_se": 0.0015769572105799193,
+      "vs_ignore": -0.07122,
+      "vs_ignore_se": 0.0009012686829422112,
+      "avg_stock_weight": 1.0,
+      "success_lowest_mu_decile": 0.2057,
+      "success_highest_mu_decile": 0.8438
+     },
+     "Fixed 60/40": {
+      "success": 0.40795,
+      "success_se": 0.0015541132439433104,
+      "vs_ignore": -0.19961,
+      "vs_ignore_se": 0.0012740779849550487,
+      "avg_stock_weight": 0.5999999999999999,
+      "success_lowest_mu_decile": 0.131,
+      "success_highest_mu_decile": 0.7259
+     }
+    },
+    "mu_deciles": [
+     -0.016809829830543563,
+     0.04470466207613996,
+     0.053400533650413105,
+     0.05954541829441873,
+     0.06496257990617942,
+     0.07000560182399039,
+     0.07510043486070243,
+     0.08053137051189145,
+     0.0868222833677121,
+     0.09582689618112819,
+     0.16116014068327397
+    ]
+   },
+   {
+    "s": 0.03,
+    "rows": {
+     "Learns the expected return": {
+      "success": 0.59574,
+      "success_se": 0.0015518822519766118,
+      "vs_ignore": -6e-05,
+      "vs_ignore_se": 0.00029051817156260654,
+      "avg_stock_weight": 0.8104242999999999,
+      "success_lowest_mu_decile": 0.1538,
+      "success_highest_mu_decile": 0.9439,
+      "dp_value": 0.5923446092514959
+     },
+     "Ignores the uncertainty": {
+      "success": 0.5958,
+      "success_se": 0.001551845224241129,
+      "vs_ignore": 0.0,
+      "vs_ignore_se": 0.0,
+      "avg_stock_weight": 0.80490475,
+      "success_lowest_mu_decile": 0.1538,
+      "success_highest_mu_decile": 0.9435,
+      "dp_value": 0.6207451474502745
+     },
+     "Fixed 100% stock": {
+      "success": 0.53208,
+      "success_se": 0.0015778810905768533,
+      "vs_ignore": -0.06372,
+      "vs_ignore_se": 0.0008632526096402377,
+      "avg_stock_weight": 1.0,
+      "success_lowest_mu_decile": 0.1061,
+      "success_highest_mu_decile": 0.9242
+     },
+     "Fixed 60/40": {
+      "success": 0.41693,
+      "success_se": 0.0015591644400126626,
+      "vs_ignore": -0.17887,
+      "vs_ignore_se": 0.001222362537343863,
+      "avg_stock_weight": 0.5999999999999999,
+      "success_lowest_mu_decile": 0.0613,
+      "success_highest_mu_decile": 0.8417
+     }
+    },
+    "mu_deciles": [
+     -0.05753679677909881,
+     0.032282132536374616,
+     0.04519762018310367,
+     0.054356495520944535,
+     0.06245277016792459,
+     0.07000840274701109,
+     0.07765976226951396,
+     0.08583586248400735,
+     0.09533234515934073,
+     0.10897318394089564,
+     0.2096125668818503
+    ]
+   }
+  ],
+  "variance_share": {
+   "0.01": {
+    "1": 0.003934221744098663,
+    "5": 0.019366342773126505,
+    "10": 0.03799682598984287,
+    "20": 0.07321183463852843,
+    "30": 0.10593973092666599
+   },
+   "0.02": {
+    "1": 0.015553316389793933,
+    "5": 0.07321183463852843,
+    "10": 0.13643501175737055,
+    "20": 0.24011053926680587,
+    "30": 0.3215607467460887
+   },
+   "0.03": {
+    "1": 0.03432757728894869,
+    "5": 0.1509156164882979,
+    "10": 0.2622531388509182,
+    "20": 0.4155317674070642,
+    "30": 0.5160748945808076
+   }
+  }
+ },
+ "regime": {
+  "good": {
+   "mu_stock": 0.1,
+   "sigma_stock": 0.12
+  },
+  "bad": {
+   "mu_stock": 0.04000000000000001,
+   "sigma_stock": 0.18708286933869708
+  },
+  "stay": 0.9,
+  "by_start": {
+   "good": {
+    "Regime-aware DP": {
+     "success": 0.72432,
+     "success_se": 0.0014130836408365926,
+     "vs_aware": 0.0,
+     "vs_aware_se": 0.0,
+     "avg_stock_weight": 0.737458,
+     "dp_value": 0.7212010692216264
+    },
+    "Regime-blind DP (base case)": {
+     "success": 0.69755,
+     "success_se": 0.001452494397579557,
+     "vs_aware": -0.02677,
+     "vs_aware_se": 0.0008970739760004099,
+     "avg_stock_weight": 0.76924325,
+     "dp_value": 0.6214986499455343
+    },
+    "Fixed 100% stock": {
+     "success": 0.61907,
+     "success_se": 0.0015356507907073145,
+     "vs_aware": -0.10525,
+     "vs_aware_se": 0.0011035110114382745,
+     "avg_stock_weight": 1.0
+    },
+    "Fixed 60/40": {
+     "success": 0.47869,
+     "success_se": 0.0015797021361636503,
+     "vs_aware": -0.24563,
+     "vs_aware_se": 0.0013892366000013486,
+     "avg_stock_weight": 0.5999999999999999
+    },
+    "Regime-aware, planned with stay = 0.5": {
+     "success": 0.71787,
+     "success_se": 0.0014231397088831442,
+     "vs_aware": -0.00645,
+     "vs_aware_se": 0.0007925214545377047,
+     "avg_stock_weight": 0.69149905
+    },
+    "Regime-aware, planned with stay = 0.75": {
+     "success": 0.7214,
+     "success_se": 0.001417681346424506,
+     "vs_aware": -0.00292,
+     "vs_aware_se": 0.0006706110893747075,
+     "avg_stock_weight": 0.70616855
+    },
+    "Regime-aware, planned with stay = 0.95": {
+     "success": 0.72402,
+     "success_se": 0.0014135594773478758,
+     "vs_aware": -0.0003,
+     "vs_aware_se": 0.0005885597370069074,
+     "avg_stock_weight": 0.7644340500000001
+    },
+    "Regime-aware, planned with stay = 0.99": {
+     "success": 0.7209,
+     "success_se": 0.001418461102744802,
+     "vs_aware": -0.00342,
+     "vs_aware_se": 0.0007331360111767181,
+     "avg_stock_weight": 0.7792302
+    }
+   },
+   "bad": {
+    "Regime-aware DP": {
+     "success": 0.59905,
+     "success_se": 0.0015498035278705491,
+     "vs_aware": 0.0,
+     "vs_aware_se": 0.0,
+     "avg_stock_weight": 0.7468768500000001,
+     "dp_value": 0.5971695001519565
+    },
+    "Regime-blind DP (base case)": {
+     "success": 0.57501,
+     "success_se": 0.001563245022061481,
+     "vs_aware": -0.02404,
+     "vs_aware_se": 0.0008963419092557163,
+     "avg_stock_weight": 0.8340936499999999,
+     "dp_value": 0.6214986499455343
+    },
+    "Fixed 100% stock": {
+     "success": 0.50809,
+     "success_se": 0.0015809318514724156,
+     "vs_aware": -0.09096,
+     "vs_aware_se": 0.0010658677895224375,
+     "avg_stock_weight": 1.0
+    },
+    "Fixed 60/40": {
+     "success": 0.37757,
+     "success_se": 0.0015330065071616624,
+     "vs_aware": -0.22148,
+     "vs_aware_se": 0.0013451706920840597,
+     "avg_stock_weight": 0.5999999999999999
+    },
+    "Regime-aware, planned with stay = 0.5": {
+     "success": 0.59066,
+     "success_se": 0.0015549301090402746,
+     "vs_aware": -0.00839,
+     "vs_aware_se": 0.0008563897553299727,
+     "avg_stock_weight": 0.6626819
+    },
+    "Regime-aware, planned with stay = 0.75": {
+     "success": 0.59526,
+     "success_se": 0.0015521776071055786,
+     "vs_aware": -0.00379,
+     "vs_aware_se": 0.000727022451246484,
+     "avg_stock_weight": 0.6854146000000001
+    },
+    "Regime-aware, planned with stay = 0.95": {
+     "success": 0.597,
+     "success_se": 0.001551099609954177,
+     "vs_aware": -0.00205,
+     "vs_aware_se": 0.000682541305436042,
+     "avg_stock_weight": 0.8089999499999999
+    },
+    "Regime-aware, planned with stay = 0.99": {
+     "success": 0.59319,
+     "success_se": 0.001553433693145607,
+     "vs_aware": -0.00586,
+     "vs_aware_se": 0.000807751897943475,
+     "avg_stock_weight": 0.83372415
+    }
+   },
+   "long-run mix": {
+    "Regime-aware DP": {
+     "success": 0.6607,
+     "success_se": 0.0014972491776588158,
+     "vs_aware": 0.0,
+     "vs_aware_se": 0.0,
+     "avg_stock_weight": 0.7422025
+    },
+    "Regime-blind DP (base case)": {
+     "success": 0.63482,
+     "success_se": 0.001522575343291753,
+     "vs_aware": -0.02588,
+     "vs_aware_se": 0.0008961642076666925,
+     "avg_stock_weight": 0.8015965,
+     "dp_value": 0.6214986499455343
+    },
+    "Fixed 100% stock": {
+     "success": 0.56236,
+     "success_se": 0.0015687932636265366,
+     "vs_aware": -0.09834,
+     "vs_aware_se": 0.0010830070050750966,
+     "avg_stock_weight": 1.0
+    },
+    "Fixed 60/40": {
+     "success": 0.42803,
+     "success_se": 0.0015646735093942123,
+     "vs_aware": -0.23267,
+     "vs_aware_se": 0.001365124663411172,
+     "avg_stock_weight": 0.5999999999999999
+    },
+    "Regime-aware, planned with stay = 0.5": {
+     "success": 0.65367,
+     "success_se": 0.0015046113488206847,
+     "vs_aware": -0.00703,
+     "vs_aware_se": 0.000829224135639256,
+     "avg_stock_weight": 0.67707135
+    },
+    "Regime-aware, planned with stay = 0.75": {
+     "success": 0.65745,
+     "success_se": 0.0015006981625230306,
+     "vs_aware": -0.00325,
+     "vs_aware_se": 0.0007028508483264068,
+     "avg_stock_weight": 0.6957981999999999
+    },
+    "Regime-aware, planned with stay = 0.95": {
+     "success": 0.6594,
+     "success_se": 0.001498638181817079,
+     "vs_aware": -0.0013,
+     "vs_aware_se": 0.0006365431264820307,
+     "avg_stock_weight": 0.7867306000000001
+    },
+    "Regime-aware, planned with stay = 0.99": {
+     "success": 0.6559,
+     "success_se": 0.0015023155128001573,
+     "vs_aware": -0.0048,
+     "vs_aware_se": 0.0007717354182331905,
+     "avg_stock_weight": 0.8063320500000001
+    }
+   }
+  }
  }
 }

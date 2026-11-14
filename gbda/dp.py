@@ -16,7 +16,8 @@ Both go through the same code path, so checks on the first carry over to the sec
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Literal
+from functools import partial
+from typing import Callable, Literal, Sequence
 
 import numpy as np
 
@@ -48,18 +49,40 @@ class Objective:
     from_ce: Callable[[Array], Array]
 
 
+# Module-level functions bound with functools.partial (not closures), so that
+# objectives and solved tables can be pickled and sent between processes.
+def _identity(x: Array) -> Array:
+    return x
+
+
+def _reached(w: Array, goal: float) -> Array:
+    return (np.asarray(w) >= goal).astype(float)
+
+
+def _power_utility(w: Array, one_minus: float, scale: float) -> Array:
+    return (np.asarray(w, dtype=float) / scale) ** one_minus / one_minus
+
+
+def _power_inverse(v: Array, one_minus: float, scale: float) -> Array:
+    return scale * (one_minus * np.asarray(v, dtype=float)) ** (1.0 / one_minus)
+
+
+def _log_utility(w: Array, scale: float) -> Array:
+    return np.log(np.asarray(w, dtype=float) / scale)
+
+
+def _log_inverse(v: Array, scale: float) -> Array:
+    return scale * np.exp(np.asarray(v, dtype=float))
+
+
 def goal_objective(goal: float) -> Objective:
     """Maximise the probability of ending at or above ``goal``: ``V_T = 1{W >= goal}``."""
-
-    def identity(x: Array) -> Array:
-        return x
-
     return Objective(
         name="goal",
         kind="goal",
-        terminal=lambda w: (np.asarray(w) >= goal).astype(float),
-        to_ce=identity,
-        from_ce=identity,
+        terminal=partial(_reached, goal=goal),
+        to_ce=_identity,
+        from_ce=_identity,
     )
 
 
@@ -71,27 +94,15 @@ def power_objective(gamma: float, scale: float = 1.0) -> Objective:
     """
     if gamma <= 0 or gamma == 1:
         raise ValueError("gamma must be positive and different from 1 (use log_objective for 1)")
-    one_minus = 1.0 - gamma
-
-    def utility(w: Array) -> Array:
-        return (np.asarray(w, dtype=float) / scale) ** one_minus / one_minus
-
-    def inverse(v: Array) -> Array:
-        return scale * (one_minus * np.asarray(v, dtype=float)) ** (1.0 / one_minus)
-
+    utility = partial(_power_utility, one_minus=1.0 - gamma, scale=scale)
+    inverse = partial(_power_inverse, one_minus=1.0 - gamma, scale=scale)
     return Objective(f"power({gamma:g})", "utility", utility, inverse, utility)
 
 
 def log_objective(scale: float = 1.0) -> Objective:
     """Log utility ``U(W) = ln(W/scale)`` (CRRA with ``gamma = 1``, growth-optimal)."""
-
-    def utility(w: Array) -> Array:
-        return np.log(np.asarray(w, dtype=float) / scale)
-
-    def inverse(v: Array) -> Array:
-        return scale * np.exp(np.asarray(v, dtype=float))
-
-    return Objective("log", "utility", utility, inverse, utility)
+    utility = partial(_log_utility, scale=scale)
+    return Objective("log", "utility", utility, partial(_log_inverse, scale=scale), utility)
 
 
 # --------------------------------------------------------------------------- #
@@ -210,8 +221,14 @@ def _choose(q: Array, risk: Array, kind: str, tie_tol: float, zero_tol: float) -
     return np.where(best <= zero_tol, int(risk.argmax()), safest)
 
 
+def _action_risk(port: Array, probs: Array) -> Array:
+    """Standard deviation of the portfolio return for each action (used to break ties)."""
+    mean = np.einsum("am,m->a", port, probs)
+    return np.sqrt(np.einsum("am,m->a", (port - mean[:, None]) ** 2, probs))
+
+
 def solve(
-    scenarios: ReturnScenarios,
+    scenarios: ReturnScenarios | Sequence[ReturnScenarios],
     actions: Array,
     grid: Array,
     objective: Objective,
@@ -225,8 +242,11 @@ def solve(
 
     Args:
         scenarios: One-period return outcomes and their probabilities. The same
-            set is used for every action and every period (common random numbers),
-            so actions are compared on identical outcomes.
+            set is used for every action (common random numbers), so actions are
+            compared on identical outcomes. Either one set used in every period,
+            or a sequence of ``horizon`` sets where entry ``t`` drives the step
+            from ``t`` to ``t + 1`` (return assumptions that change over time,
+            known in advance).
         actions: Allowed weights in asset A.
         grid: Increasing wealth grid.
         objective: Terminal reward (goal probability, power or log utility).
@@ -249,10 +269,15 @@ def solve(
     """
     actions = np.asarray(actions, dtype=float)
     grid = np.asarray(grid, dtype=float)
-    port = scenarios.portfolio(actions)  # (A, M)
-    probs = scenarios.probs
-    mean = np.einsum("am,m->a", port, probs)
-    risk = np.sqrt(np.einsum("am,m->a", (port - mean[:, None]) ** 2, probs))
+    if isinstance(scenarios, ReturnScenarios):
+        per_period = None
+        port = scenarios.portfolio(actions)  # (A, M)
+        probs = scenarios.probs
+        risk = _action_risk(port, probs)
+    else:
+        per_period = list(scenarios)
+        if len(per_period) != horizon:
+            raise ValueError(f"need one scenario set per period: got {len(per_period)}, horizon {horizon}")
 
     n = grid.size
     value = np.empty((horizon + 1, n))
@@ -260,6 +285,10 @@ def solve(
     value[horizon] = objective.terminal(grid)
 
     for t in range(horizon - 1, -1, -1):
+        if per_period is not None:
+            port = per_period[t].portfolio(actions)
+            probs = per_period[t].probs
+            risk = _action_risk(port, probs)
         last_step = t == horizon - 1
         if not last_step:
             ce_next = objective.to_ce(value[t + 1])
@@ -301,3 +330,154 @@ def solve(
         contribution=contribution,
         lookup="floor" if (objective.kind == "goal" and interp == "floor") else "nearest",
     )
+
+
+# --------------------------------------------------------------------------- #
+# A second state variable: the market state or a belief about the market
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class StateStep:
+    """One period's return scenarios in one exogenous state, and where the state goes next.
+
+    The exogenous state ``s`` lives on a finite set ``0..K-1`` (a market regime,
+    or a point on a grid of beliefs about the expected return). After scenario
+    ``j`` the next state is ``lo[j]`` with weight ``1 - w_hi[j]`` and ``hi[j]``
+    with weight ``w_hi[j]``. That covers both uses in this project:
+
+    * a two-state Markov chain whose next state does not depend on this period's
+      return: ``lo = 0``, ``hi = 1``, ``w_hi = P(s, 1)`` for every scenario;
+    * a belief that is updated from this period's return and lands between two
+      grid points: linear interpolation weights, which differ by scenario.
+
+    Attributes:
+        scenarios: Return outcomes in this state.
+        lo, hi: Next-state indices, shape ``(M,)``.
+        w_hi: Weight on ``hi``, shape ``(M,)``, in ``[0, 1]``.
+    """
+
+    scenarios: ReturnScenarios
+    lo: Array
+    hi: Array
+    w_hi: Array
+
+
+@dataclass(frozen=True)
+class StateDPSolution:
+    """Result of :func:`solve_with_state`.
+
+    Attributes:
+        grid: Wealth grid, shape ``(n,)``.
+        actions: Allowed weights in asset A, shape ``(A,)``.
+        policy: Optimal weight at each ``(t, state, grid point)``, shape ``(T, K, n)``.
+        value: Success probability at each ``(t, state, grid point)``, shape ``(T + 1, K, n)``.
+        horizon: Number of periods ``T``.
+        contribution: Amount added to wealth at the end of each period.
+    """
+
+    grid: Array
+    actions: Array
+    policy: Array
+    value: Array
+    horizon: int
+    contribution: float
+
+    @property
+    def n_states(self) -> int:
+        return self.policy.shape[1]
+
+    def grid_index(self, wealth: Array) -> Array:
+        """Nearest grid point in log wealth (same rule as :class:`DPSolution`)."""
+        mids = np.sqrt(self.grid[:-1] * self.grid[1:])
+        return np.clip(np.searchsorted(mids, np.asarray(wealth, dtype=float), side="right"), 0, self.grid.size - 1)
+
+    def action(self, t: int, wealth: Array, state: Array) -> Array:
+        """Optimal weight at time ``t`` for each (wealth, state index) pair."""
+        return self.policy[t, np.asarray(state, dtype=int), self.grid_index(wealth)]
+
+    def value_at(self, t: int, wealth: float, state: int) -> float:
+        """Success probability at time ``t`` in ``state``, linearly interpolated in wealth."""
+        return float(np.interp(wealth, self.grid, self.value[t, state]))
+
+    def in_state(self, state: int) -> DPSolution:
+        """The policy table for one fixed state, as a :class:`DPSolution` (for plotting)."""
+        return DPSolution(self.grid, self.actions, self.policy[:, state], self.value[:, state],
+                          goal_objective(np.inf), self.horizon, self.contribution)
+
+
+def _interp_rows(x: Array, xp: Array, table: Array, rows_lo: Array, rows_hi: Array, w_hi: Array) -> Array:
+    """``(1 - w) * table[lo](x) + w * table[hi](x)``, linear in ``x`` and flat beyond the ends.
+
+    ``x`` has shape ``(n, M)``; ``rows_*`` and ``w_hi`` have shape ``(M,)`` (one
+    pair of rows per scenario). Same end treatment as ``np.interp``.
+    """
+    pos = np.clip(np.searchsorted(xp, x, side="right") - 1, 0, xp.size - 2)
+    frac = np.clip((x - xp[pos]) / (xp[pos + 1] - xp[pos]), 0.0, 1.0)
+
+    def read(rows: Array) -> Array:
+        f0 = table[rows[None, :], pos]
+        return f0 + frac * (table[rows[None, :], pos + 1] - f0)
+
+    out = read(rows_lo)
+    if np.any(w_hi > 0):
+        out = out + w_hi[None, :] * (read(rows_hi) - out)
+    return out
+
+
+def solve_with_state(
+    step: Callable[[int, int], StateStep],
+    n_states: int,
+    actions: Array,
+    grid: Array,
+    goal: float,
+    horizon: int,
+    contribution: float = 0.0,
+    tie_tol: float = 1e-12,
+    zero_tol: float | None = None,
+) -> StateDPSolution:
+    """Goal-probability DP with state ``(t, wealth, s)``, ``s`` an exogenous state in ``0..K-1``.
+
+    Bellman equation::
+
+        V_t(W, s) = max_a  sum_j p_j [ (1 - w_j) V_{t+1}(W'_j, lo_j) + w_j V_{t+1}(W'_j, hi_j) ]
+
+    with ``W'_j = W * R_a,j + c`` and ``(p_j, R_j, lo_j, hi_j, w_j)`` from
+    ``step(t, s)``. With one state whose next state is itself, this is
+    :func:`solve` with the goal objective; the tests check that.
+
+    Args:
+        step: ``step(t, s)`` -> scenarios and next-state weights for the step from ``t`` to ``t + 1``.
+        n_states: Number of exogenous states ``K``.
+        actions, grid, horizon, contribution, tie_tol, zero_tol: as in :func:`solve`.
+        goal: Target wealth.
+    """
+    actions = np.asarray(actions, dtype=float)
+    grid = np.asarray(grid, dtype=float)
+    objective = goal_objective(goal)
+    zero_tol = tie_tol if zero_tol is None else zero_tol
+    n = grid.size
+    value = np.empty((horizon + 1, n_states, n))
+    policy_idx = np.empty((horizon, n_states, n), dtype=int)
+    value[horizon] = objective.terminal(grid)[None, :]
+
+    for t in range(horizon - 1, -1, -1):
+        last_step = t == horizon - 1
+        for s in range(n_states):
+            st = step(t, s)
+            port = st.scenarios.portfolio(actions)
+            probs = st.scenarios.probs
+            lo, hi = np.asarray(st.lo, dtype=int), np.asarray(st.hi, dtype=int)
+            w_hi = np.asarray(st.w_hi, dtype=float)
+            q = np.empty((actions.size, n))
+            for k in range(actions.size):
+                w_next = grid[:, None] * port[k][None, :] + contribution
+                if last_step:
+                    v = objective.terminal(w_next)
+                else:
+                    v = _interp_rows(w_next, grid, value[t + 1], lo, hi, w_hi)
+                q[k] = np.einsum("nm,m->n", v, probs)
+            np.clip(q, 0.0, 1.0, out=q)
+            choice = _choose(q, _action_risk(port, probs), "goal", tie_tol, zero_tol)
+            policy_idx[t, s] = choice
+            value[t, s] = q[choice, np.arange(n)]
+
+    return StateDPSolution(grid, actions, actions[policy_idx], value, horizon, contribution)
