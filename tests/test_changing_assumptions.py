@@ -206,3 +206,47 @@ def test_regime_chains_switch_at_the_stated_rate() -> None:
 def test_starting_in_the_good_regime_is_better() -> None:
     sol = regime.calibrated(B).solve(SHORT, m=1000)
     assert sol.value_at(0, SHORT.w0, regime.GOOD) > sol.value_at(0, SHORT.w0, regime.BAD)
+
+
+# ---- 3.2b Regimes that have to be inferred ---------------------------------------- #
+def test_belief_update_end_points() -> None:
+    model = regime.calibrated(B)
+    x = np.log(np.array([0.7, 1.0, 1.3]))
+    assert np.allclose(regime.update_belief(model, 0.0, x), 1 - model.stay_good)  # sure it was good
+    assert np.allclose(regime.update_belief(model, 1.0, x), model.stay_bad)       # sure it was bad
+    up, down = regime.update_belief(model, 0.5, np.log(np.array([1.30, 0.80])))
+    assert up < 0.5 < down  # a good year points to the good state, a bad year to the bad one
+
+
+def test_filtered_belief_is_calibrated() -> None:
+    """Among path-years where the filter says P(bad) is about p, the market is bad about p of the time."""
+    model = regime.calibrated(B)
+    reg = model.regimes(40_000, 20)
+    r_s, _ = model.paths(reg)
+    beliefs = regime.filter_beliefs(model, r_s, 0.5)[:, 1:].ravel()
+    bad = (reg[:, 1:] == regime.BAD).ravel()
+    edges = np.quantile(beliefs, np.linspace(0, 1, 6))
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        sel = (beliefs >= lo) & (beliefs < hi)
+        assert bad[sel].mean() == pytest.approx(beliefs[sel].mean(), abs=0.015)
+
+
+def test_expected_next_belief_follows_the_chain() -> None:
+    """Averaged over next year's returns, the updated belief is the prior moved one step along the chain."""
+    model = regime.calibrated(B)
+    steps = regime.HiddenSteps(model, an.World(model.good).scenarios(4000), an.World(model.bad).scenarios(4000),
+                               regime.belief_grid(11))
+    for b in (2, 5, 8):
+        p = steps.grid[b]
+        st = steps(0, b)
+        nxt = (1 - st.w_hi) * steps.grid[st.lo] + st.w_hi * steps.grid[st.hi]
+        assert nxt @ st.scenarios.probs == pytest.approx(p * model.stay_bad + (1 - p) * (1 - model.stay_good), abs=0.01)
+
+
+def test_hidden_state_with_identical_regimes_is_the_base_model() -> None:
+    same = regime.RegimeModel(B, B, 0.9, 0.9)
+    sol = regime.solve_hidden(same, SHORT, 5, 1000)
+    base = base_dp(SHORT, 1000)
+    for b in range(5):
+        assert np.array_equal(sol.policy[:, b], base.policy)
+        assert np.allclose(sol.value[:, b], base.value, atol=1e-12)

@@ -190,27 +190,82 @@ state, the policy is the original one.
 - **Here the policy changes, and so does the outcome.** Today's state says something about this period's flip and, because states persist, about the next one too. That is enough to change the best action now.
 - Starting in a good state both policies take the risk, so there is no difference. All the gain comes from not betting on a bad coin.
 - **Getting the persistence wrong costs nothing here.** Planning as if states did not persist (stay with probability ½) still holds cash in the bad state at the start, and still reaches 65.6%. In the 20-year model a wrong persistence costs 0.1–0.7 points.
-- **The catch: the investor sees the state.** If it had to be guessed from past flips, the problem would look more like method 2, and the gain would shrink.
+- **The catch: the investor sees the state.** If it had to be guessed from past flips, the problem would look more like method 2, and the gain would shrink. Method 3b tries exactly that.
+
+## 3b. Regimes you cannot see: guess the state from the flips
+
+**What changes from method 3.** The coin still switches between good (heads ¾)
+and bad (heads ¼), and stays the same with probability ¾. But now the investor
+**does not see the state**, only the flips. So the investor keeps a running
+estimate of the chance that the current period is bad, and updates it after
+every flip in two steps:
+
+1. **Bayes' rule on the flip.** A head points to the good state, a tail to the bad one.
+2. **One step of the switching.** The state may change before the next flip, so the estimate is pulled back towards ½.
+
+Starting from ½, after one tail the chance the state *was* bad is ¾ (Bayes).
+The chance the *next* period is bad is then ¾·¾ + ¼·¼ = ⅝ (switching).
+
+| Flips seen | Chance the next period is bad | Chance the next flip is heads |
+|---|---|---|
+| none | ½ | ½ |
+| H | ⅜ | 9/16 |
+| T | ⅝ | 7/16 |
+| T H | 3/7 | 15/28 |
+| T T | 2/3 | 5/12 |
+
+Compare with method 2, where after one tail the next flip is heads with chance
+⅜. Here it is 7/16, closer to ½. The state may have switched since the flip
+was seen, so each flip says less about the next one.
+
+The DP state becomes (time, wealth, chance the state is bad).
+
+**Solve backwards** (the nodes on the policy's paths):
+
+| Time | Wealth (flips seen) | Hold cash | Take risk | Best | V |
+|---|---|---|---|---|---|
+| 1 | 0.7 (T) | 0 | 7/16 · 15/28 = **15/64** | take risk | 15/64 |
+| 0 | 1 (none) | 33/64 | ½ · 1 + ½ · 15/64 = **79/128** | take risk | 79/128 = 61.7% |
+
+These are exactly the actions of the original fair-coin table: take risk at the
+start, lock in after a head, keep taking risk after a tail. At the start there
+is nothing to go on (the chance of a bad state is ½). Once a flip has been
+seen, the only nodes still in play are 1.4, where the goal is already reached,
+and 0.7 or 0.98, where taking the risk is the only way left to reach it.
+
+![Hidden-regime tree](../figures/worked_changes_hidden_tree.png)
+
+**Result.**
+
+| Policy | First state unknown | First state known to be bad (later ones hidden) |
+|---|---|---|
+| Sees the state every period (method 3) | 65.6% | 46.9% |
+| Infers the state from the flips | **61.7%** | 43.8% |
+| Ignores the state (fair-coin table) | 61.7% | 39.1% |
+
+- **When nothing is known at the start, guessing the state is worth nothing here.** All of method 3's +3.9 points came from not betting on a bad coin at the start, and an investor who cannot see the state cannot tell a bad start from a good one.
+- **Some information helps, in proportion.** If the investor is told the first state is bad but not the later ones, it holds cash at the start, as in method 3, and gets 43.8%. That recovers 4.7 of the 7.8 points that seeing every state is worth from a bad start.
+- **The forecast is still right.** Inferring the state says 61.7% and gets 61.7%; the fair-coin table says 62.5%.
 
 ## Side by side
 
-| | Original example | 1. Re-solve | 2. Parameter uncertainty | 3. Regimes |
-|---|---|---|---|---|
-| What is different | fair coin, known | heads pays ×1.3 from period 2; told at time 1 | coin good or bad for all 3 periods; never seen | coin good or bad each period; seen; stays with probability ¾ |
-| What the DP also tracks | — | nothing (solve again) | flips seen so far | today's state |
-| Ignore it: chance of reaching 1.3 | 62.5% | 50% | 59.4% | 61.7% |
-| Handle it: chance of reaching 1.3 | — | 50% | 59.4% | **65.6%** |
-| Gain from handling it | — | 0 | 0 | **+3.9 pp** |
-| Does the policy change? | — | no | no | **yes:** bad state → hold cash and wait |
-| What ignoring it says | 62.5% | 62.5% | 62.5% | 62.5% |
-| What handling it says | — | 50% | 59.4% | 84.4% (good) / 46.9% (bad) |
-| The same in the 20-year model | 62.2% | +0.2 pp; forecast 62% → 51% | ±0.03 pp; 28–88% across μ | +2.6 pp |
+| | Original example | 1. Re-solve | 2. Parameter uncertainty | 3. Regimes, seen | 3b. Regimes, inferred |
+|---|---|---|---|---|---|
+| What is different | fair coin, known | heads pays ×1.3 from period 2; told at time 1 | coin good or bad for all 3 periods; never seen | coin good or bad each period; seen; stays with probability ¾ | as 3, but only the flips are seen |
+| What the DP also tracks | — | nothing (solve again) | flips seen so far | today's state | chance the state is bad |
+| Ignore it: chance of reaching 1.3 | 62.5% | 50% | 59.4% | 61.7% | 61.7% |
+| Handle it: chance of reaching 1.3 | — | 50% | 59.4% | **65.6%** | 61.7% |
+| Gain from handling it | — | 0 | 0 | **+3.9 pp** | 0 |
+| Does the policy change? | — | no | no | **yes:** bad state → hold cash and wait | no |
+| What ignoring it says | 62.5% | 62.5% | 62.5% | 62.5% | 62.5% |
+| What handling it says | — | 50% | 59.4% | 84.4% (good) / 46.9% (bad) | 61.7% |
+| The same in the 20-year model | 62.2% | +0.2 pp; forecast 62% → 51% | ±0.03 pp; 28–88% across μ | +2.6 pp | +0.4 pp (seeing the state: +2.6) |
 
 What the three-period versions show:
 
-1. **A method improves the outcome only if it tells the policy something that changes what to do now.** Re-solving and learning do not: the best action is the same either way. Seeing the market state does: in a bad state, wait.
-2. **All three fix what the plan says.** Ignoring the change, the plan keeps saying 62.5%. In method 1 that is 12.5 points too high, in method 2 three points. In method 3 the average is about right (62.5% against 61.7%), but it hides that the real chance is 84% or 47% depending on today's state.
-3. **The pattern is the same as in the 20-year model.** Re-solving and learning change the forecast; regimes change the policy, provided the state can be seen.
+1. **A method improves the outcome only if it tells the policy something that changes what to do now.** Re-solving and learning do not: the best action is the same either way. Seeing the market state does: in a bad state, wait. *Guessing* the state from past flips mostly does not, because the guess is too weak to act on.
+2. **All of them fix what the plan says.** Ignoring the change, the plan keeps saying 62.5%. In method 1 that is 12.5 points too high, in method 2 three points. In methods 3 and 3b the average is about right (62.5% against 61.7%). But it hides that, with the state seen, the real chance is 84% or 47% depending on today's state.
+3. **The pattern is the same as in the 20-year model.** Re-solving and learning change the forecast. Regimes change the policy, but most of that is lost once the state has to be inferred.
 
 ## Check it yourself
 
@@ -218,7 +273,8 @@ What the three-period versions show:
 python -m gbda.worked_changes
 ```
 
-prints every table on this page as exact fractions and redraws the three
-trees. `tests/test_worked_changes.py`
-checks each number against the project's DP engine solving the same problems
-(per-year coins for method 1, a second state variable for methods 2 and 3).
+prints every table on this page as exact fractions and redraws the four
+trees. `tests/test_worked_changes.py` checks each number against the project's
+DP engine solving the same problems. Method 1 uses a different coin each
+period. Methods 2, 3 and 3b add a second state variable: the flips seen so far,
+today's state, or the flip history.

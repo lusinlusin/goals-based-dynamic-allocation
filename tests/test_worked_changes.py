@@ -105,16 +105,51 @@ def test_regime_engine_matches_the_hand_calculation() -> None:
 
 # ---- Comparison ------------------------------------------------------------------- #
 def test_comparison_table() -> None:
-    rows = {r.method[0]: r for r in wc.comparison()}
+    rows = {r.method.split(".")[0]: r for r in wc.comparison()}
     assert (rows["1"].ignore_success, rows["1"].handle_success, rows["1"].handle_says) == (F(1, 2), F(1, 2), F(1, 2))
     assert (rows["2"].ignore_success, rows["2"].handle_success, rows["2"].handle_says) == (F(19, 32),) * 3
     assert (rows["3"].ignore_success, rows["3"].handle_success, rows["3"].handle_says) == (F(79, 128), F(21, 32), F(21, 32))
-    assert [r.policy_changes for r in rows.values()] == [False, False, True]
+    assert (rows["3b"].ignore_success, rows["3b"].handle_success, rows["3b"].handle_says) == (F(79, 128),) * 3
+    assert [r.policy_changes for r in rows.values()] == [False, False, True, False]
     assert all(r.ignore_says == F(5, 8) for r in rows.values())
 
 
 def test_trees_are_drawn(tmp_path) -> None:
     wc.draw_trees(str(tmp_path))
     names = sorted(f.name for f in tmp_path.iterdir())
-    assert names == ["worked_changes_learning_tree.png", "worked_changes_regime_tree.png",
-                     "worked_changes_resolve_tree.png"]
+    assert names == ["worked_changes_hidden_tree.png", "worked_changes_learning_tree.png",
+                     "worked_changes_regime_tree.png", "worked_changes_resolve_tree.png"]
+
+
+# ---- 3b. Regimes you cannot see ------------------------------------------------- #
+def test_hidden_regime_beliefs() -> None:
+    h = wc.HALF
+    assert (wc.hidden_update(h, True), wc.hidden_update(h, False)) == (F(3, 8), F(5, 8))
+    assert wc.hidden_p_heads(F(5, 8)) == F(7, 16)  # after a tail: less informative than a fixed coin (3/8)
+    assert wc.hidden_update(F(5, 8), True) == F(3, 7) and wc.hidden_p_heads(F(3, 7)) == F(15, 28)
+
+
+def test_hidden_regime_numbers_in_the_write_up() -> None:
+    assert wc.hidden_value(1, F(7, 10), F(5, 8))[1:] == (0, F(15, 64))
+    assert wc.hidden_value(0, wc.W0, wc.HALF)[1:] == (F(33, 64), F(79, 128))
+    assert wc.hidden_action(0, wc.W0, wc.HALF) == RISK
+
+    def blind(t, w, p):
+        return wc.coin_action(t, w, wc.OLD_COIN)
+
+    # Start unknown: inferring the state gives exactly what ignoring it gives.
+    assert wc.success_hidden(wc.hidden_action) == wc.success_hidden(blind) == F(79, 128)
+    # First state known to be bad, later ones hidden: between ignoring (25/64) and seeing (15/32).
+    assert wc.hidden_action(0, wc.W0, F(1)) == CASH
+    assert wc.success_hidden(wc.hidden_action, wc.BAD) == F(7, 16)
+    assert wc.success_hidden(blind, wc.BAD) == F(25, 64)
+
+
+def test_hidden_regime_engine_matches_the_hand_calculation() -> None:
+    sol = wc.hidden_engine()
+    for t, w, s in wc.ON_PATH_3B:
+        b = wc.HALF
+        for i in range(t):
+            b = wc.hidden_update(b, bool((s >> (t - 1 - i)) & 1))
+        assert state_value(sol, t, float(w), s) == pytest.approx(float(wc.hidden_value(t, w, b)[0]))
+        assert sol.action(t, float(w), s) == wc.hidden_action(t, w, b)

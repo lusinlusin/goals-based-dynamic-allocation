@@ -58,7 +58,7 @@ Six findings, in order of importance:
 3. **A dynamic policy adds 7–10 points over the best fixed mix** for goals that are a stretch but reachable, and about 22 points over 60/40. In saving terms it is worth about $2,300 a year: reaching 75% takes $12,100 a year with the dynamic policy and $14,500 with 60/40.
 4. **The objective is a decision, not a detail.** "Maximise the chance of reaching the goal" and "maximise expected utility" produce very different policies (62% vs 38% success, but $323K vs $296K at the 10th percentile). The goal-probability policy gives up the upside to buy probability, and keeps full stock risk for anyone who falls behind.
 5. **A cap on the stock weight is expensive for this goal.** A maximum of 80% costs 8 points, 60% costs 20 points.
-6. **When the assumptions change, re-solve for the sake of the forecast.** If the expected stock return falls from 7% to 5% in year 10, re-solving adds only 0.2 points of success. It does correct the plan's own forecast from 62% to 51%, and getting back to 62% takes about $4,100 more saving a year. Uncertainty about the expected return leaves the policy unchanged; what it changes is how far the quoted probability can be trusted: at s = 2% the same policy succeeds 28% of the time if μ turns out in its worst tenth and 88% in its best. Knowing whether the market is in a good or a bad state would be worth 2.6 points, if the state could be observed ([section 6](#6-when-assumptions-change)).
+6. **When the assumptions change, re-solve for the sake of the forecast.** If the expected stock return falls from 7% to 5% in year 10, re-solving adds only 0.2 points of success. It does correct the plan's own forecast from 62% to 51%, and getting back to 62% takes about $4,100 more saving a year. Uncertainty about the expected return leaves the policy unchanged; what it changes is how far the quoted probability can be trusted: at s = 2% the same policy succeeds 28% of the time if μ turns out in its worst tenth and 88% in its best. Knowing whether the market is in a good or a bad state would be worth 2.6 points if the state could be seen; inferred from returns, as it has to be in practice, it is worth 0.4 ([section 6](#6-when-assumptions-change)).
 
 ## 1. Return assumptions come first
 
@@ -324,22 +324,53 @@ Full tables: [results/regime.md](results/regime.md).
 - **The two tables are very different.** In year 0 the good-state policy holds 100% stocks up to about $230K, the bad-state policy only up to about $41K (regime-blind: about $132K). In the bad state stocks earn 1 point more than bonds for almost four times the volatility. So even an investor who is behind holds mostly bonds and waits for the good state.
 - **Knowing the state is worth 2.6 points** (paired s.e. 0.09) over the regime-blind policy, whichever state the market starts in.
 - **Getting the persistence wrong costs little.** Planning with a stay probability of 0.5 (no persistence) instead of the true 0.9 costs 0.7 points; 0.99 costs 0.5; 0.75 or 0.95 cost 0.1–0.3. Most of the gain comes from knowing which state the market is in now, not how long it will last.
-- **The big caveat: the state is assumed to be observed.** In practice it has to be inferred from returns, and one year of returns says little because the two states overlap heavily (10% ± 12% against 4% ± 19%). So 2.6 points is an upper bound on what regime information is worth here.
+- **The big caveat: the state is assumed to be seen.** In practice it has to be inferred from returns. The next subsection does that.
+
+### If the state has to be inferred
+
+![Hidden regimes](figures/regime_hidden.png)
+
+Same two states and switching, but now the investor does not see the state.
+The investor keeps the probability that the market is in the bad state and
+updates it every year in two steps:
+
+1. **Bayes' rule on the year's stock return.** A good year points to the good state, a bad year to the bad one.
+2. **One step of the switching.** The state may change before next year, so the probability is pulled back towards ½.
+
+The DP state becomes (year, wealth, probability of the bad state), with 11 belief points.
+
+| Policy | First state good (known) | First state bad (known) | First state unknown |
+|---|---|---|---|
+| Sees the state every year | 72.4% (+2.7 pp) | 59.9% (+2.4 pp) | 66.1% (+2.6 pp) |
+| **Infers the state from stock returns** | 70.2% (+0.4 pp) | 57.9% (+0.4 pp) | **63.9% (+0.4 pp)** |
+| Ignores the state (base-case policy) | 69.8% | 57.5% | 63.5% |
+
+Brackets: gain over ignoring the state, on the same paths (paired s.e. 0.05 pp
+for inferring, 0.09 pp for seeing). In the first two columns the first state is
+known and later ones are hidden. Full table: [results/regime_hidden.md](results/regime_hidden.md).
+
+- **About 85% of the value of regime information disappears once the state has to be inferred:** +2.6 points with the state seen, +0.4 points without.
+- **The reason is in the left panel.** In a single year a good state and a bad state produce very similar stock returns (10% ± 12% against 4% ± 19%), so the estimate moves slowly and wanders. On that path the market is bad for fifteen years in a row, and the investor's estimate swings between 37% and 88% the whole time. Across all paths the filter calls the state right in 68% of years (a coin toss gets 50%). Its average probability of the bad state is 0.58 in bad years and 0.42 in good ones.
+- **Knowing the first state hardly helps.** The information fades within a few years as the state may switch, so the gain stays at 0.4 points.
+- **The forecast is right.** The inferring policy says 63.9% and gets 63.9%. The base-case policy says 62.1% and gets 63.5%: persistent states change the 20-year distribution even though each single year matches the base case.
+- **Check:** with two identical states the hidden-state DP is exactly the base model. The filter is calibrated: in years where it says the bad state has probability p, the market is in the bad state about p of the time.
+- The [three-period example](docs/worked_example_changes.md#3b-regimes-you-cannot-see-guess-the-state-from-the-flips) shows the same effect by hand. There, guessing the state is worth nothing at all.
 
 ### Which one to use
 
-| | Re-solve | Parameter uncertainty | Regimes |
-|---|---|---|---|
-| Idea | recompute when the assumptions change | admit μ is unknown, learn it | plan for the market switching |
-| Extra DP state | none | estimate of μ | market state |
-| Solve time | about 3 s per re-solve | about 45 s (13 belief points) | about 15 s (2 states) |
-| What it changed here | the forecast (62% → 51%), and so the saving needed | the forecast and its range, not the policy | the policy (+2.6 pp), if the state can be seen |
-| Check that it reduces to the base model | unchanged assumptions → original table | s = 0 → base model | two identical states → base model |
+| | Re-solve | Parameter uncertainty | Regimes, seen | Regimes, inferred |
+|---|---|---|---|---|
+| Idea | recompute when the assumptions change | admit μ is unknown, learn it | plan for the market switching | the same, guessing the state from returns |
+| Extra DP state | none | estimate of μ | market state | probability of the bad state |
+| Solve time | about 3 s per re-solve | about 45 s (13 belief points) | about 15 s (2 states) | about 2 min (11 belief points) |
+| What it changed here | the forecast (62% → 51%), and so the saving needed | the forecast and its range, not the policy | the policy (+2.6 pp) | the forecast; +0.4 pp |
+| Check that it reduces to the base model | unchanged assumptions → original table | s = 0 → base model | two identical states → base model | two identical states → base model |
 
-For this problem the practical order is: **re-solve whenever the assumptions
-change** (cheap, and it keeps the quoted probability honest); **report the
-success probability as a range** that reflects uncertainty about μ; and use a
-regime model only if the state can actually be identified in real time.
+For this problem the practical order is:
+
+1. **Re-solve whenever the assumptions change.** It is cheap, and it keeps the quoted probability honest.
+2. **Report the success probability as a range** that reflects uncertainty about μ.
+3. **Do not expect much from regime models.** Unless the state can be identified far better than from one year of returns, they add little: 0.4 points here.
 
 ## Method
 
@@ -355,7 +386,7 @@ New to dynamic programming, or want to see the recursion run once by hand? [A th
 
 I first checked the code on a simple two-outcome market where the answers can
 be worked out by hand; the stock/bond problem then runs through the same solver.
-`pytest` runs 87 checks, including:
+`pytest` runs 94 checks, including:
 
 - the three-period example: the engine reproduces every number in the hand calculation, for the original problem and for each of the three methods of section 6;
 - the simple market: the optimal policy under log and power utility is one fixed mix at every date and wealth level and matches the closed-form weight; the sampled-expectation DP converges to the exact one; the goal-probability DP is bracketed between a lower and an upper bound, and forward simulation lands inside the bracket;
@@ -365,14 +396,15 @@ be worked out by hand; the stock/bond problem then runs through the same solver.
 - saving more never lowers the success probability; a cap never raises it;
 - the DP's estimate agrees with out-of-sample simulation (62.1% vs 62.2% ± 0.15%);
 - re-solving with unchanged assumptions reproduces the rest of the original table exactly; a change known in advance gives the same rows as a re-solve on the date of the change; re-solving every year and only when the assumptions change give identical paths;
-- zero parameter uncertainty and two identical regimes each reduce to the base model exactly; the belief update equals the closed-form Bayesian posterior, and the DP's belief transitions keep the expected next belief equal to today's;
+- zero parameter uncertainty and two identical regimes (seen or inferred) each reduce to the base model exactly; the belief update equals the closed-form Bayesian posterior, and the DP's belief transitions keep the expected next belief equal to today's (moved one step along the chain, for regimes);
+- the regime filter is calibrated: in years where it puts the bad state at probability p, the market is in the bad state about p of the time;
 - a saved policy table loads back identically, inputs included;
 - each generator hits its target mean, volatility and correlation; the bootstrap keeps stock and bond returns paired and years consecutive within a block.
 
 ## Limitations and next steps
 
 - **Nominal, pre-tax, no costs.** Inflation, taxes, fees and transaction costs are ignored. With trading costs the policy would get a no-trade band around its current weight.
-- **The regime model assumes the market state is observed.** Section 6 adds a good/bad state to the DP, but in practice the state has to be inferred from returns. The next step is a hidden-state version, in which the DP state is the probability of being in the bad state, updated by Bayes' rule each year. The solver already handles a belief state (section 6 uses one for μ). The block bootstrap still tests the policy against serial dependence that no model here exploits.
+- **The regime model knows its own parameters.** The hidden-state version infers *which* state the market is in, but takes the two states' returns and the switching probability as known, and learns from stock returns alone. Estimating those too, or adding a signal that identifies the state better than one year of returns (valuations, for example), are the next steps. The block bootstrap still tests the policy against serial dependence that no model here exploits.
 - **Parameter uncertainty covers the expected stock return only.** Volatilities, the correlation and bond returns are treated as known, and the investor learns from stock returns alone (bond returns would add a little information through the correlation). Each re-solve in section 6 also assumes the new assumptions then hold forever.
 - **Two assets, yearly rebalancing, 10% weight steps, no borrowing.**
 - **Savings are certain** and the goal is all-or-nothing. A natural extension is a blended objective (probability of success plus a penalty on the size of a miss), which would address the behaviour in section 3.
@@ -393,9 +425,9 @@ python -m pytest tests -q
 python run.py
 ```
 
-`python run.py` takes about nine minutes on a 10-core laptop and rewrites every
+`python run.py` takes about twelve minutes on a 10-core laptop and rewrites every
 table in `results/` and figure in `figures/`. `python run.py --only sensitivity`
-runs one section (`--only resolve uncertainty regime` runs section 6, about five
+runs one section (`--only resolve uncertainty regime hidden` runs section 6, about eight
 minutes); `python -m gbda.binomial` runs the simple-market check.
 
 ## Layout
@@ -410,13 +442,13 @@ gbda/
   policy.py      policy tables: solve offline, look up at run time, save/load with their inputs
   resolve.py     assumptions that change mid-plan: keep the table, re-solve, hindsight
   param_uncertainty.py  expected stock return unknown: per-path draws, a policy that learns it
-  regime.py      good and bad market states as a second DP state variable
+  regime.py      good and bad market states as a second DP state variable, seen or inferred
   binomial.py    the simple two-outcome market used to check the engine
   worked_example.py  the three-period example, by hand and by the engine
   worked_changes.py  the same example under re-solving, parameter uncertainty and regimes
   plots.py       shared chart style
 run.py           runs every experiment; writes results/ and figures/
-tests/           87 checks
+tests/           94 checks
 docs/            worked_example.md: the recursion done by hand on a three-period problem
                  worked_example_changes.md: the same problem under the three methods of section 6
 data/            annual US stock, bill and bond returns, 1928–2025 (source in data/SOURCE.md)

@@ -267,6 +267,92 @@ def regime_engine(stay: float = float(STAY)) -> dp.StateDPSolution:
 
 
 # =========================================================================== #
+# 3b. Regimes you cannot see: the coin switches, and the investor has to guess
+# =========================================================================== #
+def hidden_update(p_bad: Fraction, heads: bool) -> Fraction:
+    """Chance the *next* period is bad, from the chance this period is bad and this period's flip.
+
+    Bayes' rule on the flip, then one step of the switching (stay with probability ``STAY``).
+    """
+    like_bad = P_BAD if heads else 1 - P_BAD
+    like_good = P_GOOD if heads else 1 - P_GOOD
+    post = p_bad * like_bad / (p_bad * like_bad + (1 - p_bad) * like_good)
+    return post * STAY + (1 - post) * (1 - STAY)
+
+
+def hidden_p_heads(p_bad: Fraction) -> Fraction:
+    return p_bad * P_BAD + (1 - p_bad) * P_GOOD
+
+
+@lru_cache(maxsize=None)
+def hidden_value(t: int, w: Fraction, p_bad: Fraction) -> tuple[Fraction, Fraction, Fraction]:
+    """``(V, hold, risk)`` for the investor who cannot see the state; ``p_bad`` = chance this period is bad."""
+    if t == PERIODS:
+        r = reached(w)
+        return r, r, r
+    p = hidden_p_heads(p_bad)
+    after_h, after_t = hidden_update(p_bad, True), hidden_update(p_bad, False)
+    hold = p * hidden_value(t + 1, w, after_h)[0] + (1 - p) * hidden_value(t + 1, w, after_t)[0]
+    risk = p * hidden_value(t + 1, w * UP, after_h)[0] + (1 - p) * hidden_value(t + 1, w * DOWN, after_t)[0]
+    return best(hold, risk)[0], hold, risk
+
+
+def hidden_action(t: int, w: Fraction, p_bad: Fraction) -> float:
+    _, hold, risk = hidden_value(t, w, p_bad)
+    return best(hold, risk)[1]
+
+
+def success_hidden(policy: Callable[[int, Fraction, Fraction], float], start: int | None = None) -> Fraction:
+    """Exact success of a policy that sees only its belief, in the switching world of method 3.
+
+    ``start``: the first state, known to the investor (later states are not);
+    ``None``: good or bad with probability 1/2, and the investor starts at 1/2.
+    """
+    starts = [start] if start is not None else [GOOD, BAD]
+    prior = HALF if start is None else F(int(start == BAD))
+    total = F(0)
+    for s0 in starts:
+        for later_states in product((GOOD, BAD), repeat=PERIODS - 1):
+            states = (s0,) + later_states
+            p_states = F(1)
+            for a, b in zip(states[:-1], states[1:]):
+                p_states *= move(a, b)
+            for flips in product((True, False), repeat=PERIODS):
+                prob, w, belief = p_states, W0, prior
+                for t, (s, h) in enumerate(zip(states, flips)):
+                    prob *= P_STATE[s] if h else 1 - P_STATE[s]
+                    if policy(t, w, belief) == RISK:
+                        w *= UP if h else DOWN
+                    belief = hidden_update(belief, h)
+                total += prob * reached(w)
+    return total / len(starts)
+
+
+def hidden_engine() -> dp.StateDPSolution:
+    """The engine on method 3b. The second state variable is the flip history (4 histories at most),
+    from which the belief is computed exactly, so the engine needs no belief grid here."""
+
+    def step(t: int, s: int) -> dp.StateStep:
+        p = float(hidden_p_heads(hidden_belief(t, s)))
+        heads, tails = min(2 * s + 1, 3), min(2 * s, 3)  # only used before the last period, where s <= 1
+        return dp.StateStep(_coin(p), np.array([heads, tails]), np.array([heads, tails]), np.zeros(2))
+
+    return dp.solve_with_state(step, 4, np.array([CASH, RISK]), _grid(), float(GOAL), PERIODS)
+
+
+def hidden_belief(t: int, history: int) -> Fraction:
+    """Chance the state is bad at time ``t`` after the flips encoded in ``history`` (oldest first), from 1/2."""
+    b = HALF
+    for i in range(t):
+        b = hidden_update(b, bool((history >> (t - 1 - i)) & 1))
+    return b
+
+
+#: History index used by :func:`hidden_engine` for the nodes on the policy's paths: (time, wealth, index).
+ON_PATH_3B = [(0, W0, 0), (1, F(7, 5), 1), (1, F(7, 10), 0), (2, F(49, 50), 1), (2, F(7, 5), 2), (2, F(7, 5), 3)]
+
+
+# =========================================================================== #
 # Summary
 # =========================================================================== #
 @dataclass(frozen=True)
@@ -292,6 +378,8 @@ def comparison() -> list[Row]:
         Row("2. Parameter uncertainty", success_unknown_coin(ignore_action), learn, r["promised"],
             learn_value(0, W0, 0)[0], any(learn_action(t, w, h) != ignore_action(t, w, h) for t, w, h in ON_PATH_2)),
         Row("3. Regimes", blind, aware, r["promised"], aware_says, regime_action(0, W0, BAD) != RISK),
+        Row("3b. Hidden regimes", blind, success_hidden(hidden_action), r["promised"], hidden_value(0, W0, HALF)[0],
+            any(hidden_action(t, w, hidden_belief(t, i)) != coin_action(t, w, OLD_COIN) for t, w, i in ON_PATH_3B)),
     ]
 
 
@@ -458,6 +546,34 @@ def tree_regimes(path) -> None:
                     f"(chance {pct(rv(0, 1, GOOD))}). Edge labels: state changes after a hold, coin flips after a risk.")
 
 
+def tree_hidden(path) -> None:
+    """Method 3b: the switching coin of method 3, but the investor only sees the flips."""
+    hv = lambda t, w, b: hidden_value(t, F(w), b)[0]  # noqa: E731
+    bad = lambda b: f"chance the state is bad: {frac(b)}"  # noqa: E731
+    b0 = HALF
+    b_h, b_t = hidden_update(b0, True), hidden_update(b0, False)
+    b_th, b_tt = hidden_update(b_t, True), hidden_update(b_t, False)
+    nodes = [
+        Node(0, 3.0, "1", "risk", caption=f"take risk\nchance {pct(hv(0, 1, b0))}",
+             sub=f"{bad(b0)}\n(sees the state: {pct(success_regimes(regime_action))})"),
+        Node(1, 4.5, "1.4", "cash", 0, f"heads {frac(hidden_p_heads(b0))}", f"hold cash\nchance {pct(hv(1, 1.4, b_h))}",
+             bad(b_h)),
+        Node(1, 1.5, "0.7", "risk", 0, f"tails {frac(1 - hidden_p_heads(b0))}", f"take risk\nchance {pct(hv(1, 0.7, b_t))}",
+             bad(b_t)),
+        Node(2, 4.5, "1.4", "cash", 1, "hold", "hold cash\nchance 100%"),
+        Node(2, 2.4, "0.98", "risk", 2, f"heads {frac(hidden_p_heads(b_t))}", f"take risk\nchance {pct(hv(2, 0.98, b_th))}",
+             bad(b_th)),
+        Node(2, 0.6, "0.49", "out", 2, f"tails {frac(1 - hidden_p_heads(b_t))}", "out of reach\nchance 0%", bad(b_tt)),
+        Node(3, 4.5, "1.4", "reached", 3, "hold"),
+        Node(3, 3.0, "1.372", "reached", 4, f"heads {frac(hidden_p_heads(b_th))}"),
+        Node(3, 1.8, "0.686", "missed", 4, f"tails {frac(1 - hidden_p_heads(b_th))}"),
+        Node(3, 0.6, "0.686", "missed", 5, "heads (best case)"),
+    ]
+    _draw_tree(path, nodes, "3b. Hidden regimes: guessing the state leads to the same actions as ignoring it",
+               height=5.9, note="Edge labels: chance of that flip given the flips seen so far. The state can switch "
+                                "between flips, so a tail says less about the next flip than in method 2 (7/16, not 3/8).")
+
+
 def draw_trees(folder: str = "figures") -> None:
     """Write the three tree figures used in docs/worked_example_changes.md."""
     from pathlib import Path
@@ -466,6 +582,7 @@ def draw_trees(folder: str = "figures") -> None:
     tree_resolve(folder_path / "worked_changes_resolve_tree.png")
     tree_learning(folder_path / "worked_changes_learning_tree.png")
     tree_regimes(folder_path / "worked_changes_regime_tree.png")
+    tree_hidden(folder_path / "worked_changes_hidden_tree.png")
 
 
 def main() -> None:
@@ -499,6 +616,17 @@ def main() -> None:
               f"either {pct(success_regimes(pol))}")
     wrong = success_regimes(lambda t, w, s: regime_action(t, w, s, HALF))
     print(f"   planned with stay = 1/2 (no persistence): {pct(wrong)}")
+
+    print("\n3b. Hidden regimes: the same switching coin, but only the flips are seen")
+    for t, w, i in ((0, W0, 0), (1, F(7, 10), 0), (1, F(1), 1), (1, F(1), 0)):
+        b = hidden_belief(t, i)
+        v, hold, risk = hidden_value(t, w, b)
+        print(f"   t={t} W={float(w):g} P(bad)={b}: P(heads)={hidden_p_heads(b)}, hold {hold}, risk {risk}, V {v}")
+    blind = lambda t, w, b: coin_action(t, w, OLD_COIN)  # noqa: E731
+    print(f"   first state unknown: infers {pct(success_hidden(hidden_action))}, ignores {pct(success_hidden(blind))}, "
+          f"sees {pct(success_regimes(regime_action))}")
+    print(f"   first state known bad: infers {pct(success_hidden(hidden_action, BAD))}, ignores "
+          f"{pct(success_hidden(blind, BAD))}, sees {pct(success_regimes(regime_action, BAD))}")
 
     print("\nComparison")
     for row in comparison():

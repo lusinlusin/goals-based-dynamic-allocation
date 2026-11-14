@@ -17,6 +17,7 @@ to ``figures/``. Sections:
     resolve      assumptions change in year 10: keep the table, re-solve, or hindsight
     uncertainty  the expected stock return is uncertain; a policy that learns it
     regime       good and bad market states in the DP state
+    hidden       the same states when they have to be inferred from returns
 """
 
 from __future__ import annotations
@@ -957,6 +958,80 @@ def section_regime(n_paths: int) -> dict[str, Any]:
     return res
 
 
+def section_hidden(n_paths: int) -> dict[str, Any]:
+    """3.2b: the market state has to be inferred from stock returns."""
+    model = regime.calibrated(B)
+    res = regime.hidden_experiment(INVESTOR, model, n_paths)
+    seen, inferred, ignored = "Sees the state", "Infers the state from returns", "Ignores the state (base case)"
+    starts = ["good", "bad", "long-run mix"]
+    names = [seen, inferred, ignored, "Fixed 100% stock", "Fixed 60/40"]
+
+    def cell(start: str, name: str) -> str:
+        r = res["by_start"][start][name]
+        return pct(r["success"]) + ("" if name == ignored else f" ({pp(r['vs_ignore'])})")
+
+    headers = ["Policy", "First state good (known)", "First state bad (known)", "First state unknown (long-run mix)"]
+    table = md_table(headers, [[name] + [cell(s, name) for s in starts] for name in names])
+    mix = res["by_start"]["long-run mix"]
+    tr = res["tracking"]
+    write(
+        "regime_hidden",
+        f"Regimes that have to be inferred — {n_paths:,} forward paths",
+        table,
+        "Same two states as results/regime.md (stay probability 0.9). \"Infers the state\" updates P(bad state) "
+        "from each year's stock return by Bayes' rule and solves the DP on (year, wealth, P(bad)) with "
+        f"{res['n_beliefs']} belief points; \"sees the state\" is told the state every year; \"ignores the state\" "
+        "is the base-case policy. Brackets: paired difference against ignoring the state (s.e. "
+        f"{100 * mix[inferred]['vs_ignore_se']:.2f} pp for inferring, {100 * mix[seen]['vs_ignore_se']:.2f} pp for "
+        f"seeing). In the first two columns the investor knows the first state; later states are hidden. "
+        f"The filter calls the state right in {pct(tr['share_of_years_called_right'], 0)} of years; its average "
+        f"P(bad) is {tr['mean_belief_when_bad']:.2f} in bad years and {tr['mean_belief_when_good']:.2f} in good ones. "
+        f"DP's own estimate, first state unknown: inferring {pct(mix[inferred]['dp_value'])} (actual "
+        f"{pct(mix[inferred]['success'])}); ignoring {pct(mix[ignored]['dp_value'])} (actual {pct(mix[ignored]['success'])}).",
+    )
+
+    fig, axes = plt.subplots(1, 2, figsize=(13.5, 4.6), gridspec_kw={"width_ratios": [1.3, 1]})
+    ax = axes[0]
+    years = np.arange(INVESTOR.horizon)
+    reg = np.array(tr["example_regimes"])
+    for t in years[reg == regime.BAD]:
+        ax.axvspan(t - 0.5, t + 0.5, color=plots.GRID, lw=0, zorder=0)
+    ax.plot(years, tr["example_beliefs"], color=plots.BLUE, marker="o", ms=5, mec=plots.SURFACE, mew=1, zorder=3)
+    ax.axhline(0.5, color=plots.AXIS, lw=1, ls=(0, (4, 3)))
+    ax.set_xlim(-0.5, INVESTOR.horizon - 0.5)
+    ax.set_ylim(0, 1)
+    ax.set_xticks(range(0, INVESTOR.horizon, 5))
+    ax.yaxis.set_major_formatter(lambda v, _: f"{int(round(100 * v))}%")
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Investor's P(bad state)")
+    ax.set_title("One path: shaded years are bad, the line is what the investor believes")
+    ax.legend(handles=[plt.Rectangle((0, 0), 1, 1, color=plots.GRID), plt.Line2D([], [], color=plots.BLUE, marker="o")],
+              labels=["Bad state (not seen by the investor)", "P(bad) inferred from stock returns"], loc="upper left")
+
+    ax = axes[1]
+    labels = {"good": "First state good (known)", "bad": "First state bad (known)", "long-run mix": "First state unknown"}
+    for j, (name, label, color, marker) in enumerate(((seen, "Sees the state", plots.AQUA, "o"),
+                                                      (inferred, "Infers it from returns", plots.BLUE, "s"))):
+        y = np.arange(len(starts))[::-1] + (0.5 - j) * 0.3
+        x = np.array([100 * res["by_start"][s][name]["vs_ignore"] for s in starts])
+        err = np.array([196 * res["by_start"][s][name]["vs_ignore_se"] for s in starts])
+        ax.errorbar(x, y, xerr=err, fmt=marker, color=color, ms=8, mec=plots.SURFACE, mew=1, elinewidth=1.2,
+                    capsize=0, label=label)
+        for xi, ei, yi in zip(x, err, y):
+            ax.text(xi + ei + 0.06, yi, f"+{xi:.1f}", va="center", fontsize=9, color=plots.INK)
+    ax.axvline(0, color=plots.INK, lw=1)
+    ax.set_yticks(range(len(starts)), [labels[s] for s in starts][::-1])
+    ax.set_xlim(-0.2, 3.4)
+    ax.grid(axis="y", visible=False)
+    ax.set_xlabel("Gain in success probability over ignoring the state (pp, ±95%)")
+    ax.set_title("Seeing the state is worth 2.6 pp; inferring it, 0.4")
+    ax.legend(loc="lower right")
+    fig.tight_layout()
+    plots.save(fig, FIGURES / "regime_hidden.png")
+    res.pop("policy_year5")
+    return res
+
+
 # --------------------------------------------------------------------------- #
 def _jsonable(obj: Any) -> Any:
     """Convert numpy types and drop large arrays for the JSON dump."""
@@ -974,7 +1049,7 @@ def _jsonable(obj: Any) -> Any:
 def main() -> None:
     """Run the selected sections and write tables, figures and ``results/results.json``."""
     sections = ["compare", "assumptions", "sensitivity", "dynamic", "cap", "precision", "saving",
-                "resolve", "uncertainty", "regime"]
+                "resolve", "uncertainty", "regime", "hidden"]
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--only", nargs="+", choices=sections, default=sections)
     parser.add_argument("--quick", action="store_true", help="20,000 forward paths instead of 100,000")
@@ -1008,8 +1083,10 @@ def main() -> None:
             res = section_resolve(n_paths)
         elif name == "uncertainty":
             res = section_uncertainty(n_paths)
-        else:
+        elif name == "regime":
             res = section_regime(n_paths)
+        else:
+            res = section_hidden(n_paths)
         results[name] = _jsonable(res)
         out_file.write_text(json.dumps(results, indent=1))
         print(f"[{name}] done in {time.time() - start:.0f}s")
