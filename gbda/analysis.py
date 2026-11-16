@@ -98,9 +98,12 @@ class World:
 
 
 def make_objective(name: str, investor: Investor) -> dp.Objective:
-    """``"goal"``, ``"log"`` or ``"power:<gamma>"`` -> objective for this investor."""
+    """``"goal"``, ``"log"``, ``"power:<gamma>"`` or ``"shortfall:<power>:<eta>"`` -> objective for this investor."""
     if name == "goal":
         return dp.goal_objective(investor.goal)
+    if name.startswith("shortfall:"):
+        _, power, eta = name.split(":")
+        return dp.shortfall_objective(investor.goal, float(eta), float(power))
     if name == "log":
         return dp.log_objective(scale=investor.goal)
     if name.startswith("power:"):

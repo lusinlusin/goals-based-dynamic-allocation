@@ -33,7 +33,8 @@ class Objective:
 
     Attributes:
         name: Short label, e.g. ``"goal"``, ``"power(5)"``, ``"log"``.
-        kind: ``"goal"`` (probability of reaching a target) or ``"utility"``.
+        kind: ``"goal"`` (probability of reaching a target), ``"shortfall"`` (that
+            probability minus a penalty on the size of a miss) or ``"utility"``.
         terminal: ``V_T(W)``.
         to_ce: Maps a value to the scale it is interpolated on. For utilities this
             is the certainty equivalent ``U^{-1}(V)``, which is close to linear in
@@ -43,7 +44,7 @@ class Objective:
     """
 
     name: str
-    kind: Literal["goal", "utility"]
+    kind: Literal["goal", "shortfall", "utility"]
     terminal: Callable[[Array], Array]
     to_ce: Callable[[Array], Array]
     from_ce: Callable[[Array], Array]
@@ -57,6 +58,11 @@ def _identity(x: Array) -> Array:
 
 def _reached(w: Array, goal: float) -> Array:
     return (np.asarray(w) >= goal).astype(float)
+
+
+def _reached_minus_shortfall(w: Array, goal: float, eta: float, power: float) -> Array:
+    w = np.asarray(w, dtype=float)
+    return (w >= goal).astype(float) - eta * (np.maximum(goal - w, 0.0) / goal) ** power
 
 
 def _power_utility(w: Array, one_minus: float, scale: float) -> Array:
@@ -84,6 +90,27 @@ def goal_objective(goal: float) -> Objective:
         to_ce=_identity,
         from_ce=_identity,
     )
+
+
+def shortfall_objective(goal: float, eta: float, power: float = 1.0) -> Objective:
+    """Reach the goal, and mind how far short a miss falls.
+
+    ``V_T = 1{W >= goal} - eta * ((goal - W)^+ / goal)^power``: the probability of
+    reaching the goal minus ``eta`` times the expected shortfall (``power = 1``)
+    or the expected squared shortfall (``power = 2``), as a share of the goal.
+    ``eta = 0`` is the goal objective.
+
+    With ``power = 1`` and wealth below the goal the penalty is linear in wealth,
+    so it rewards expected wealth; with ``power = 2`` it penalises large misses
+    more than small ones, which is what makes an investor who is behind take less risk.
+    """
+    if eta < 0 or power <= 0:
+        raise ValueError("eta must be non-negative and power positive")
+    if eta == 0:
+        return goal_objective(goal)
+    terminal = partial(_reached_minus_shortfall, goal=goal, eta=eta, power=power)
+    name = f"shortfall(eta={eta:g}, power={power:g})"
+    return Objective(name, "shortfall", terminal, _identity, _identity)
 
 
 def power_objective(gamma: float, scale: float = 1.0) -> Objective:
@@ -214,9 +241,11 @@ def _choose(q: Array, risk: Array, kind: str, tie_tol: float, zero_tol: float) -
     taken, which is the limit of the optimal policy as wealth falls.
     """
     best = q.max(axis=0)
-    if kind != "goal":
+    if kind == "utility":
         return q.argmax(axis=0)
     tied = q >= best[None, :] - tie_tol
+    if kind == "shortfall":  # ties to the least risky action; the penalty ranks actions even far below the goal
+        return np.where(tied, risk[:, None], np.inf).argmin(axis=0)
     safest = np.where(tied, risk[:, None], np.inf).argmin(axis=0)
     return np.where(best <= zero_tol, int(risk.argmax()), safest)
 
@@ -308,6 +337,10 @@ def solve(
                     v = np.where(flat > grid[-1], 1.0, ce_next[idx]).reshape(w_next.shape)
                 else:
                     v = np.interp(w_next.ravel(), grid, ce_next).reshape(w_next.shape)
+            elif objective.kind == "shortfall":
+                # Linear in wealth between grid points; flat beyond the ends (above the
+                # top the value is 1; below the bottom, a few thousand dollars, it barely moves).
+                v = np.interp(w_next.ravel(), grid, ce_next).reshape(w_next.shape)
             else:
                 ce = _interp_linear_extrap(w_next.ravel(), grid, ce_next)
                 v = objective.from_ce(np.maximum(ce, 1e-12)).reshape(w_next.shape)

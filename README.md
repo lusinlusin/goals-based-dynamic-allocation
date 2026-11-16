@@ -51,7 +51,7 @@ correlation 0.2, lognormal returns, yearly rebalancing, stock weight in steps of
 Standard error on each probability: 0.15 percentage points (pp). Full table:
 [results/strategy_comparison.md](results/strategy_comparison.md).
 
-Seven findings, in order of importance:
+Eight findings, in order of importance:
 
 1. **The expected stock return matters more than everything else combined.** One point less (6% instead of 7%) cuts the success probability from 62% to 52%. No other single parameter moves it by more than about 3 points. Across reasonable ways of setting expected returns the answer ranges from 62% to 98%.
 2. **The policy is far more robust than the probability.** A policy optimised for the base case and then run in a world with different returns loses less than 1 point against a policy re-optimised for that world. The model is reliable on *what to do*; it is only as good as the forecast on *how likely it is to work*.
@@ -60,6 +60,7 @@ Seven findings, in order of importance:
 5. **A cap on the stock weight is expensive for this goal.** A maximum of 80% costs 8 points, 60% costs 20 points.
 6. **When the assumptions change, re-solve for the sake of the forecast.** If the expected stock return falls from 7% to 5% in year 10, re-solving adds only 0.2 points of success. It does correct the plan's own forecast from 62% to 51%, and getting back to 62% takes about $4,100 more saving a year. Uncertainty about the expected return leaves the policy unchanged; what it changes is how far the quoted probability can be trusted: at s = 2% the same policy succeeds 28% of the time if μ turns out in its worst tenth and 88% in its best. Knowing whether the market is in a good or a bad state would be worth 2.6 points if the state could be seen; inferred from returns, as it has to be in practice, it is worth 0.4 ([section 6](#6-when-assumptions-change)).
 7. **Reviewing the saving every year is worth about as much as a dynamic allocation.** Reaching 75% takes $12,100 a year with a dynamic allocation and fixed saving, and $10,400 on average if the saving is also reviewed every year (60/40: $14,500 fixed, $12,300 reviewed). The price is uncertainty about the saving itself: one path in ten averages about $17,400 a year or more ([section 7](#7-review-the-saving-not-only-the-allocation)).
+8. **To protect the bad case, penalise the squared shortfall, not the shortfall.** Raising the 10th-percentile outcome from $296K to $320K costs 8 points of success with a squared-shortfall penalty, 21 with power utility and 29 with a stock cap. A penalty on the plain (linear) shortfall barely changes the policy: below the goal it only rewards expected wealth ([section 8](#8-count-the-size-of-a-miss)).
 
 ## 1. Return assumptions come first
 
@@ -179,7 +180,7 @@ stocks, paths that missed were still about 95% in stocks.
 | Certainty equivalent at γ = 5 | $359K | $397K | $356K |
 
 - **The goal-probability policy sells the upside.** Its 90th percentile is $677K against $1.0M for all stocks: once the goal is secured there is no reward for more. In exchange it adds 8 points of success with about the same downside as all stocks.
-- **It does nothing for the paths that fall behind.** They stay fully in stocks to the end, and a miss lands at $357K on average against $389K for 60/40. An objective that only counts hits is indifferent to how large a miss is. In practice it needs a cap on risk (next section) or a blended objective.
+- **It does nothing for the paths that fall behind.** They stay fully in stocks to the end, and a miss lands at $357K on average against $389K for 60/40. An objective that only counts hits is indifferent to how large a miss is. In practice it needs a cap on risk (next section) or a penalty on the size of a miss ([section 8](#8-count-the-size-of-a-miss): it has to be the *squared* shortfall).
 - **Utility policies depend on wealth only because of the yearly saving.** Future savings act like a bond holding, so an investor with little financial wealth can hold more stock. Without contributions the policy is one constant weight — a property the test suite checks.
 - With these return assumptions, log utility and γ = 2 want more than 100% in stocks, so the policy sits at the limit and equals the all-stock mix. γ = 5 behaves much like a wealth-aware glide path and ends close to 60/40.
 - Each utility policy matches or beats every other strategy on the certainty equivalent under its own utility, which is what it was built to do.
@@ -413,6 +414,54 @@ Full table: [results/saving_review.md](results/saving_review.md).
 - **The review reacts to the drop.** It sees the worse forecast in year 10 and raises saving to about $14,400 a year. For about the same total saving as the fixed $12,100 plan, it reaches 69.4% instead of 65.9%. In present value it saves less: $11,800 against $12,100 a year.
 - **It does not get back to 75%.** Half the time is gone when the drop is noticed, and the yearly target (63.7%) was set for the base case. Getting back to 75% would take a higher target, and more saving.
 
+## 8. Count the size of a miss
+
+The goal objective only counts whether the goal is reached. So an investor who
+is behind holds all stocks to the end, and a miss lands at $357K on average
+(section 3). The usual fix is to subtract a penalty on the shortfall:
+
+```
+maximise   P(reach $500K)  −  η · E[ ((500K − W)⁺ / 500K)^p ]
+```
+
+The power is either p = 1 (expected shortfall) or p = 2 (expected squared
+shortfall). With η = 0 this is the goal objective; a larger η cares more about
+how far short a miss falls. For a sense of scale: with p = 2 and η = 32, ending
+30% short ($350K) counts about four times as bad as missing by a dollar.
+
+![Shortfall frontier](figures/shortfall_frontier.png)
+
+Each line is one way of trading success for a better bad case:
+
+- the two penalties as η rises;
+- a cap on the stock weight;
+- power utility as γ rises;
+- fixed mixes.
+
+All are scored on the same 100,000 paths, and up and to the right is better.
+The goal objective alone gives 62.2% success with a 10th percentile of $296K.
+
+**Chance of reaching $500K when the 10th-percentile outcome must be at least …**
+
+| | $305K | $310K | $315K | $320K |
+|---|---|---|---|---|
+| **Squared shortfall penalty** | **60.3%** | **58.7%** | **56.8%** | **54.6%** |
+| Power utility | 51.7% | 50.7% | 46.3% | 41.3% |
+| Goal objective with a stock cap | 56.0% | 51.1% | 44.4% | 32.8% |
+| Fixed mix | 49.2% | 45.9% | 40.9% | 31.1% |
+| Linear shortfall penalty | not reached | not reached | not reached | not reached |
+
+Every strategy, with expected and root-mean-square shortfall: [results/shortfall.md](results/shortfall.md).
+
+- **The linear penalty does almost nothing.** Below the goal, (500K − W)⁺ is just 500K − W, so the penalty rewards *expected* wealth, and stocks have the higher expected return. Even at η = 32 the 10th percentile only moves from $296K to $305K, and paths that miss still hold 79% stock in their last five years. This is the version usually suggested, and it misses its purpose.
+- **The squared penalty works, and gives up the least success.** Raising the 10th percentile to $320K costs it 8 points of success (62% → 55%). Power utility pays 21 points, a stock cap 29. At η = 32 the squared penalty reaches 53% with a 10th percentile of $323K. That is the same bad case as power utility with γ = 5, which succeeds 38% of the time.
+
+![Shortfall policies](figures/shortfall_policies.png)
+
+- **What the squared penalty changes.** Near the date, an investor who is short of the goal holds less stock. In year 19 the policy holds all stocks only below $294K (goal objective: $467K), and at $350K it holds 60% instead of 100%. Far behind, every objective still holds all stocks: the miss will be large anyway, and the way to make it smaller is higher expected wealth.
+- **Why caps and power utility cost more.** They take risk off nearly everywhere, including where the investor is ahead or far behind. The squared penalty takes it off only where one bad year can turn a small miss into a large one.
+- **Expected shortfall hardly moves.** It stays at $50–54K under both penalties, and rises to $56–79K with caps. What these strategies trade is the chance of a miss against how deep the deep misses are, measured here by the 10th percentile and the root-mean-square shortfall.
+
 ## Method
 
 New to dynamic programming, or want to see the recursion run once by hand? [A three-period example](docs/worked_example.md) solves a tiny version of the problem on paper (62.5% against 50% for a fixed rule) and shows how it maps onto the full one. [The same example, worked three more ways](docs/worked_example_changes.md) does the same for the three methods of section 6.
@@ -427,7 +476,7 @@ New to dynamic programming, or want to see the recursion run once by hand? [A th
 
 I first checked the code on a simple two-outcome market where the answers can
 be worked out by hand; the stock/bond problem then runs through the same solver.
-`pytest` runs 97 checks, including:
+`pytest` runs 102 checks, including:
 
 - the three-period example: the engine reproduces every number in the hand calculation, for the original problem and for each of the three methods of section 6;
 - the simple market: the optimal policy under log and power utility is one fixed mix at every date and wealth level and matches the closed-form weight; the sampled-expectation DP converges to the exact one; the goal-probability DP is bracketed between a lower and an upper bound, and forward simulation lands inside the bracket;
@@ -441,6 +490,7 @@ be worked out by hand; the stock/bond problem then runs through the same solver.
 - the regime filter is calibrated: in years where it puts the bad state at probability p, the market is in the bad state about p of the time;
 - a saved policy table loads back identically, inputs included;
 - a fixed saving run through the saving-review code reproduces the fixed plan path for path, and the reported success never falls when the saving rises;
+- a shortfall penalty of η = 0 is exactly the goal objective; far below the goal the linear penalty holds all stocks (it reduces to expected wealth), and near the date the squared penalty holds less stock when short of the goal;
 - each generator hits its target mean, volatility and correlation; the bootstrap keeps stock and bond returns paired and years consecutive within a block.
 
 ## Limitations and next steps
@@ -450,7 +500,7 @@ be worked out by hand; the stock/bond problem then runs through the same solver.
 - **Parameter uncertainty covers the expected stock return only.** Volatilities, the correlation and bond returns are treated as known, and the investor learns from stock returns alone (bond returns would add a little information through the correlation). Each re-solve in section 6 also assumes the new assumptions then hold forever.
 - **Two assets, yearly rebalancing, 10% weight steps, no borrowing.**
 - **The saving review ignores what saving costs the household.** Apart from the present-value check, it treats a dollar saved this year like one saved next year. It caps saving at $40,000 a year and leaves out income, other goals and the strain of a sudden jump in saving. The principled version is a DP with saving as a second decision and a cost on saving.
-- **Savings are certain** and the goal is all-or-nothing. A natural extension is a blended objective (probability of success plus a penalty on the size of a miss), which would address the behaviour in section 3.
+- **Savings are certain.** The shortfall penalty in section 8 uses one power (2) and a goal fixed in nominal dollars. The choice of η is a statement of preference that the model cannot make for the investor.
 - **History is one country, 98 years.** The bootstrap can only replay what is in that record.
 - The same engine extends to retirement drawdown: change the sign of the yearly cash flow and make the target "wealth stays above zero".
 
@@ -468,10 +518,10 @@ python -m pytest tests -q
 python run.py
 ```
 
-`python run.py` takes about fourteen minutes on a 10-core laptop and rewrites every
+`python run.py` takes about fifteen minutes on a 10-core laptop and rewrites every
 table in `results/` and figure in `figures/`. `python run.py --only sensitivity`
 runs one section (`--only resolve uncertainty regime hidden` runs section 6, about eight
-minutes; `--only review` runs section 7, about two); `python -m gbda.binomial` runs the
+minutes; `--only review` runs section 7, about two; `--only shortfall` runs section 8, under a minute); `python -m gbda.binomial` runs the
 simple-market check.
 
 ## Layout
@@ -488,12 +538,13 @@ gbda/
   param_uncertainty.py  expected stock return unknown: per-path draws, a policy that learns it
   regime.py      good and bad market states as a second DP state variable, seen or inferred
   saving.py      the annual saving review: one table per saving level, the rule, its experiment
+  shortfall.py   the shortfall-penalty objectives against a cap, power utility and fixed mixes
   binomial.py    the simple two-outcome market used to check the engine
   worked_example.py  the three-period example, by hand and by the engine
   worked_changes.py  the same example under re-solving, parameter uncertainty and regimes
   plots.py       shared chart style
 run.py           runs every experiment; writes results/ and figures/
-tests/           97 checks
+tests/           102 checks
 docs/            worked_example.md: the recursion done by hand on a three-period problem
                  worked_example_changes.md: the same problem under the three methods of section 6
 data/            annual US stock, bill and bond returns, 1928–2025 (source in data/SOURCE.md)

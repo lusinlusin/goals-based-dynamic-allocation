@@ -19,6 +19,7 @@ to ``figures/``. Sections:
     regime       good and bad market states in the DP state
     hidden       the same states when they have to be inferred from returns
     review       saving reviewed every year, against fixed saving
+    shortfall    penalise the size of a miss; against a cap, power utility, fixed mixes
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from gbda import analysis as an
-from gbda import market, metrics, param_uncertainty, plots, regime, resolve, saving, simulate
+from gbda import market, metrics, param_uncertainty, plots, regime, resolve, saving, shortfall, simulate
 from gbda.analysis import Investor, World
 
 RESULTS = Path("results")
@@ -1116,6 +1117,106 @@ def section_review(n_paths: int) -> dict[str, Any]:
     return res
 
 
+def section_shortfall(n_paths: int) -> dict[str, Any]:
+    """Section 8: penalise the size of a miss; compare with a cap, power utility and fixed mixes."""
+    res = shortfall.experiment(INVESTOR, n_paths)
+    fam = res["families"]
+
+    def k(x: float) -> str:
+        return f"${x / 1000:,.0f}K"
+
+    def row(label: str, r: dict[str, Any]) -> list[str]:
+        return [label, pct(r["success"]), k(r["p05"]), k(r["p10"]), k(r["median"]), k(r["mean_wealth_if_missed"]),
+                k(r["expected_shortfall"]), k(r["rms_shortfall"]), pct(r["avg_stock_weight"], 0),
+                pct(r["avg_stock_last5_if_missed"], 0)]
+
+    headers = ["Strategy", "Success", "5th pct", "10th pct", "Median", "Avg. wealth if missed", "Expected shortfall",
+               "RMS shortfall", "Avg. stock", "Stock in last 5 years, paths that miss"]
+    rows = [row(f"Linear penalty, η = {r['eta']:g}", r) for r in fam["Linear shortfall penalty"]]
+    rows += [row(f"Squared penalty, η = {r['eta']:g}", r) for r in fam["Squared shortfall penalty"][1:]]
+    rows += [row(f"Goal, stock cap {r['cap']:.0%}", r) for r in fam["Goal with a stock cap"][1:]]
+    rows += [row(f"Power utility, γ = {r['gamma']:g}", r) for r in fam["Power utility"]]
+    rows += [row(f"Fixed {r['weight']:.0%} stock", r) for r in fam["Fixed mix"] if r["weight"] >= 0.3]
+    levels = (305_000.0, 310_000.0, 315_000.0, 320_000.0)
+    names = ["Squared shortfall penalty", "Linear shortfall penalty", "Goal with a stock cap", "Power utility", "Fixed mix"]
+    matched = {name: [shortfall.success_at(fam[name], lv) for lv in levels] for name in names}
+    matched_table = md_table(["Strategy family"] + [f"10th pct ≥ {k(lv)}" for lv in levels],
+                             [[name] + [pct(v) if v == v else "not reached" for v in vals] for name, vals in matched.items()])
+    write(
+        "shortfall",
+        f"Penalising the size of a miss — {n_paths:,} forward paths",
+        f"### Chance of reaching the goal when the 10th-percentile outcome must be at least …\n\n{matched_table}\n\n"
+        f"### Every strategy\n\n{md_table(headers, rows)}",
+        "Objective: maximise P(W ≥ goal) − η · E[((goal − W)⁺ / goal)^p], p = 1 (linear) or 2 (squared); η = 0 is "
+        "the goal objective. Expected shortfall = E[(goal − W)⁺] over all paths; RMS shortfall = its root mean square. "
+        "Matched table: success read off each family's efficient side, by linear interpolation between its points.",
+    )
+
+    # ---- figure: the trade-off -------------------------------------------------- #
+    styles = {
+        "Squared shortfall penalty": (plots.BLUE, "o", "-", "eta", "η = {:g}"),
+        "Linear shortfall penalty": (plots.AQUA, "s", "-", "eta", "η = {:g}"),
+        "Goal with a stock cap": (plots.YELLOW, "^", "-", "cap", "cap {:.0%}"),
+        "Power utility": (plots.MAGENTA, "D", "-", "gamma", "γ = {:g}"),
+        "Fixed mix": (plots.GREY, ".", (0, (3, 2)), "weight", "{:.0%}"),
+    }
+    fig, ax = plt.subplots(figsize=(11, 6.2))
+    for name, (color, marker, ls, key, fmt) in styles.items():
+        # In parameter order (eta up, cap down, gamma up, weight up), so each line traces its family.
+        pts = [r for r in fam[name] if name != "Fixed mix" or r["weight"] >= 0.3]
+        x = np.array([r["p10"] for r in pts]) / 1000
+        y = np.array([r["success"] for r in pts])
+        ax.plot(x, y, color=color, ls=ls, marker=marker, ms=6 if marker != "." else 8, mec=plots.SURFACE, mew=1,
+                label=name, zorder=3 if name.startswith("Squared") else 2)
+    for name, pick in (("Squared shortfall penalty", (16.0, 32.0, 64.0)), ("Goal with a stock cap", (0.8, 0.6)),
+                       ("Power utility", (3.0, 5.0, 10.0)), ("Linear shortfall penalty", (32.0,)),
+                       ("Fixed mix", (0.3, 0.6, 1.0))):
+        color, _, _, key, fmt = styles[name]
+        for r in fam[name]:
+            if r[key] in pick:
+                ax.annotate(fmt.format(r[key]), (r["p10"] / 1000, r["success"]), xytext=(6, 4),
+                            textcoords="offset points", fontsize=8.5, color=plots.INK_2)
+    goal_row = fam["Squared shortfall penalty"][0]
+    ax.annotate("goal objective\n(η = 0, no cap)", (goal_row["p10"] / 1000, goal_row["success"]), xytext=(-10, 10),
+                textcoords="offset points", ha="right", fontsize=8.5, color=plots.INK)
+    ax.set_xlabel("10th percentile of final wealth ($K) — how bad a bad outcome is")
+    ax.set_ylabel("Chance of reaching $500K")
+    ax.yaxis.set_major_formatter(lambda v, _: f"{int(round(100 * v))}%")
+    ax.set_ylim(0.1, 0.68)
+    ax.set_title("Buying a better bad case: the squared shortfall penalty gives up the least success")
+    ax.legend(loc="lower left")
+    fig.tight_layout()
+    plots.save(fig, FIGURES / "shortfall_frontier.png")
+
+    # ---- figure: what the policies do --------------------------------------------- #
+    shown = {"goal": "Goal objective", "shortfall:1:8": "Linear penalty, η = 8", "shortfall:2:32": "Squared penalty, η = 32",
+             "power:5": "Power utility, γ = 5"}
+    sols = an.run_parallel(an.solve_policy, [(INVESTOR, BASE, obj) for obj in shown])
+    fig, axes = plt.subplots(1, 5, figsize=(16, 4.3), gridspec_kw={"width_ratios": [1, 1, 1, 1, 0.22]})
+    mesh = None
+    for ax, sol, title in zip(axes[:4], sols, shown.values()):
+        mesh = plots.policy_heatmap(ax, sol.grid, sol.policy, title, goal=INVESTOR.goal, w_range=(5e4, 2e6))
+        ax.yaxis.set_major_formatter(plots.dollars)
+        ax.set_yticks([5e4, 1e5, 2e5, 5e5, 1e6, 2e6])
+        ax.minorticks_off()
+        ax.set_xticks(range(0, INVESTOR.horizon + 1, 5))
+    for ax in axes[1:4]:
+        ax.set_yticklabels([])
+    axes[0].set_ylabel("Wealth")
+    axes[4].axis("off")
+    cax = axes[4].inset_axes([0.1, 0.1, 0.25, 0.8])
+    cb = fig.colorbar(mesh, cax=cax, ticks=np.linspace(0, 1, 6))
+    cb.ax.set_yticklabels([f"{int(100 * x)}%" for x in np.linspace(0, 1, 6)])
+    cb.outline.set_visible(False)
+    axes[4].set_title("Stock", fontsize=10, loc="left")
+    fig.suptitle("Optimal stock weight: near the date, the squared penalty cuts risk for an investor who is short of the goal",
+                 x=0.01, ha="left", fontsize=13, fontweight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    plots.save(fig, FIGURES / "shortfall_policies.png")
+    res["matched"] = {"levels": list(levels), "success": matched}
+    return res
+
+
 # --------------------------------------------------------------------------- #
 def _jsonable(obj: Any) -> Any:
     """Convert numpy types and drop large arrays for the JSON dump."""
@@ -1133,7 +1234,7 @@ def _jsonable(obj: Any) -> Any:
 def main() -> None:
     """Run the selected sections and write tables, figures and ``results/results.json``."""
     sections = ["compare", "assumptions", "sensitivity", "dynamic", "cap", "precision", "saving",
-                "resolve", "uncertainty", "regime", "hidden", "review"]
+                "resolve", "uncertainty", "regime", "hidden", "review", "shortfall"]
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--only", nargs="+", choices=sections, default=sections)
     parser.add_argument("--quick", action="store_true", help="20,000 forward paths instead of 100,000")
@@ -1171,8 +1272,10 @@ def main() -> None:
             res = section_regime(n_paths)
         elif name == "hidden":
             res = section_hidden(n_paths)
-        else:
+        elif name == "review":
             res = section_review(n_paths)
+        else:
+            res = section_shortfall(n_paths)
         results[name] = _jsonable(res)
         out_file.write_text(json.dumps(results, indent=1))
         print(f"[{name}] done in {time.time() - start:.0f}s")
